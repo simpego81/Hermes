@@ -1,0 +1,11 @@
+coverage/
+dist/
+dist-electron/
+node_modules/
+package-lock.json
+CLAUD_initial_requirements.md
+HERMES_Istruzioni_Direttore_Tecnico.md
+HERMES_Technical_Architecture.md
+HERMES_Working_Agreements.md
+COMMUNICATION/TASKS/
+COMMUNICATION/REPORTS/

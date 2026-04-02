@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+dist/
+dist-electron/
+.DS_Store
+Thumbs.db
