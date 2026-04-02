@@ -1,54 +1,55 @@
 /* Hermes root application shell. */
-import { StatusBoard } from './components/StatusBoard';
-import { parseMarkdownDocument } from './lib/metadata';
-
-const sampleDocument = `---
-type: task
-status: TO-DO
-priority: HIGH
-assignees: [[Mario Rossi]], [[Giulia Verdi]]
----
-
-Ship the first Hermes milestone with references to [[TASK-001]] and [[Objective Alpha]].`;
-
-const parsedDocument = parseMarkdownDocument(sampleDocument);
+import { useCallback, useMemo, useState } from 'react';
+import { Graph } from './components/Graph';
+import { Sidebar } from './components/Sidebar';
+import { buildGraphData, DEMO_PAGES, pageFromSource } from './lib/vault';
+import type { HermesPage } from './lib/types';
 
 export default function App() {
+  const [pages, setPages] = useState<HermesPage[]>(DEMO_PAGES);
+  const [vaultPath, setVaultPath] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const graphData = useMemo(() => buildGraphData(pages), [pages]);
+
+  const openVault = useCallback(async () => {
+    if (!window.hermesDesktop?.vault) return;
+    setLoading(true);
+    try {
+      const dir = await window.hermesDesktop.vault.openDialog();
+      if (!dir) return;
+      const files = await window.hermesDesktop.vault.readFiles(dir);
+      const loaded = files.map((f: VaultFile) => pageFromSource(f.path, f.content));
+      setPages(loaded.length > 0 ? loaded : DEMO_PAGES);
+      setVaultPath(dir);
+      setSelectedId(null);
+      setSearchQuery('');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return (
-    <main className="app-shell">
-      <section className="hero-panel">
-        <p className="eyebrow">Hermes / Vault Intelligence</p>
-        <h1>Graph-native project delivery workspace.</h1>
-        <p className="lede">
-          The baseline repository now includes Electron, React, linting,
-          formatting, Jest coverage, and GitHub Actions-ready quality gates.
-        </p>
-      </section>
-
-      <section className="content-grid">
-        <StatusBoard />
-
-        <article className="card">
-          <h2>Markdown Metadata Preview</h2>
-          <dl className="metadata-list">
-            {Object.entries(parsedDocument.metadata).map(([key, value]) => (
-              <div key={key} className="metadata-row">
-                <dt>{key}</dt>
-                <dd>{Array.isArray(value) ? value.join(', ') : value}</dd>
-              </div>
-            ))}
-          </dl>
-        </article>
-
-        <article className="card">
-          <h2>Linked Entities</h2>
-          <ul className="link-list">
-            {parsedDocument.links.map((link) => (
-              <li key={link}>{link}</li>
-            ))}
-          </ul>
-        </article>
-      </section>
-    </main>
+    <div className="app-layout">
+      <Sidebar
+        pages={pages}
+        selectedId={selectedId}
+        searchQuery={searchQuery}
+        vaultPath={vaultPath}
+        onPageSelect={setSelectedId}
+        onSearchChange={setSearchQuery}
+        onOpenVault={() => void openVault()}
+      />
+      <main className="graph-area">
+        {loading && <div className="loading-overlay">Loading vault…</div>}
+        <Graph
+          data={graphData}
+          selectedId={selectedId}
+          onNodeClick={setSelectedId}
+        />
+      </main>
+    </div>
   );
 }
