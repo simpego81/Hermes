@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Avvia Vite in background; attende che il dev server sia pronto sulla porta 5173.
+      "label": "vite: dev server",
+      "type": "shell",
+      "command": "node node_modules/vite/bin/vite.js",
+      "isBackground": true,
+      "presentation": {
+        "group": "hermes-debug",
+        "reveal": "silent",
+        "close": false
+      },
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "Local:"
+        }
+      }
+    },
+    {
+      // Compila il processo main di Electron (con source maps per il debug).
+      "label": "electron: build main",
+      "type": "shell",
+      "command": "node node_modules/typescript/bin/tsc -p tsconfig.electron.json && node node_modules/typescript/bin/tsc -p tsconfig.preload.json",
+      "group": "build",
+      "options": {
+        "env": {
+          "NODE_OPTIONS": ""
+        },
+        "shell": {
+          "executable": "cmd.exe",
+          "args": ["/d", "/c"]
+        }
+      },
+      "presentation": {
+        "group": "hermes-debug",
+        "reveal": "silent",
+        "close": true
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      // Task composito: prima avvia Vite (background), poi compila Electron.
+      // Usato come preLaunchTask dalla configurazione di debug compound.
+      "label": "hermes: prepare debug",
+      "dependsOrder": "sequence",
+      "dependsOn": ["vite: dev server", "electron: build main"],
+      "presentation": { "reveal": "silent" }
+    }
+  ]
+}

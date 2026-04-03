@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Debug del processo main Electron con source maps sul codice TypeScript originale.
+      // Espone la porta 9222 per il Chrome DevTools Protocol (renderer).
+      "name": "Hermes – Main Process",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "windows": {
+        "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd"
+      },
+      "args": [".", "--remote-debugging-port=9222"],
+      "env": {
+        "VITE_DEV_SERVER_URL": "http://127.0.0.1:5173"
+      },
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/dist-electron/**/*.js"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ],
+      "skipFiles": ["<node_internals>/**", "**/node_modules/electron/**"]
+    },
+    {
+      // Attach al renderer Electron tramite Chrome DevTools Protocol.
+      // Avviare DOPO il Main Process (o tramite il compound Hermes – E2E).
+      // I breakpoint funzionano direttamente sui file .tsx / .ts in src/.
+      "name": "Hermes – Renderer (attach)",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "timeout": 20000,
+      "webRoot": "${workspaceFolder}/src",
+      "urlFilter": "http://127.0.0.1:5173/*",
+      "sourceMapPathOverrides": {
+        "/@fs/${workspaceFolder}/*": "${workspaceFolder}/*",
+        "/@fs/*": "/*",
+        "/src/*": "${workspaceFolder}/src/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      // Avvio end-to-end: Vite → compila Electron → avvia Electron con debugger → attach renderer.
+      // Breakpoint attivi sia in electron/main.ts che in src/**/*.tsx.
+      "name": "Hermes – E2E Debug",
+      "configurations": ["Hermes – Main Process", "Hermes – Renderer (attach)"],
+      "preLaunchTask": "hermes: prepare debug",
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "order": 1
+      }
+    }
+  ]
+}

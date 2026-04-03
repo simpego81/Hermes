@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       dirPath: string,
     ): Promise<Array<{ path: string; content: string }>> =>
       ipcRenderer.invoke('vault:read-files', dirPath),
+    writeFile: (dirPath: string, relPath: string, content: string): Promise<void> =>
+      ipcRenderer.invoke('vault:write-file', dirPath, relPath, content),
   },
 });

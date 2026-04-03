@@ -11,17 +11,26 @@
     "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "npm run clean && npm run typecheck && npm run build:renderer && npm run build:electron",
     "build:renderer": "vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && tsc -p tsconfig.preload.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.electron.json && tsc --noEmit -p tsconfig.preload.json",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "test": "jest --coverage"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.41.0",
+    "@lezer/highlight": "^1.2.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-force-graph": "^1.48.2"
+    "react-force-graph": "^1.48.2",
+    "react-force-graph-2d": "^1.29.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",

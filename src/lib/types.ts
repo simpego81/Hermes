@@ -4,8 +4,8 @@ export type PageType = 'persona' | 'task' | 'objective' | 'component' | 'note';
 
 export const PAGE_COLORS: Record<PageType, string> = {
   persona: '#4fc3f7',
-  task: '#81c784',
-  objective: '#ffb74d',
+  task: '#ffb74d',
+  objective: '#81c784',
   component: '#ce93d8',
   note: '#90a4ae',
 };

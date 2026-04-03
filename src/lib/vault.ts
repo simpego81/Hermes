@@ -46,7 +46,7 @@ export function buildGraphData(pages: HermesPage[]): GraphData {
     id: p.id,
     label: p.title,
     type: p.type,
-    val: BASE_NODE_SIZE + (incoming.get(p.id) ?? 0) * LINK_SCALE,
+    val: BASE_NODE_SIZE + Math.sqrt(incoming.get(p.id) ?? 0) * LINK_SCALE,
   }));
 
   const links: GraphLink[] = [];
@@ -58,6 +58,67 @@ export function buildGraphData(pages: HermesPage[]): GraphData {
   );
 
   return { nodes, links };
+}
+
+// ── Wiki-link integrity utilities (TASK-011) ──────────────────────────────────
+
+export interface BrokenLink {
+  /** Page that contains the unresolved link. */
+  pageId: string;
+  /** Wiki-link target title that does not match any page. */
+  brokenLink: string;
+}
+
+/** Return every `[[wiki-link]]` in the vault that does not resolve to a page. */
+export function findBrokenLinks(pages: HermesPage[]): BrokenLink[] {
+  const titles = new Set(pages.map((p) => p.title));
+  const broken: BrokenLink[] = [];
+  for (const page of pages) {
+    for (const link of page.links) {
+      if (!titles.has(link)) {
+        broken.push({ pageId: page.id, brokenLink: link });
+      }
+    }
+  }
+  return broken;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Rename a page and propagate the title change to every `[[wiki-link]]`
+ * in the vault that referenced the old title.
+ * Returns a new pages array (immutable).
+ */
+export function renamePage(
+  pages: HermesPage[],
+  oldTitle: string,
+  newTitle: string,
+): HermesPage[] {
+  const re = new RegExp(`\\[\\[${escapeRegExp(oldTitle)}\\]\\]`, 'g');
+  return pages.map((page) => {
+    let updated = page;
+
+    // Rename the page itself.
+    if (page.title === oldTitle) {
+      const newId = page.id.replace(
+        new RegExp(`${escapeRegExp(oldTitle)}\\.md$`, 'i'),
+        `${newTitle}.md`,
+      );
+      updated = { ...page, id: newId, title: newTitle };
+    }
+
+    // Update outgoing wiki-links in the body.
+    if (updated.links.includes(oldTitle)) {
+      const newBody = updated.body.replace(re, `[[${newTitle}]]`);
+      const newLinks = updated.links.map((l) => (l === oldTitle ? newTitle : l));
+      updated = { ...updated, body: newBody, links: newLinks };
+    }
+
+    return updated;
+  });
 }
 
 // Demo vault rendered on first launch (no real vault selected)

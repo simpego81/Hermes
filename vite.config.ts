@@ -9,6 +9,6 @@ export default defineConfig({
     port: 5173,
   },
   optimizeDeps: {
-    include: ['react-force-graph', 'react-force-graph-2d'],
+    include: ['react-force-graph-2d'],
   },
 });

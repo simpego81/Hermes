@@ -231,3 +231,339 @@ body,
   backdrop-filter: blur(4px);
 }
 
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+
+.toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 15;
+  pointer-events: all;
+}
+
+.toolbar-btn {
+  padding: 5px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--sidebar-border);
+  background: rgba(30, 30, 36, 0.85);
+  color: var(--sidebar-muted);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.toolbar-btn:hover {
+  background: rgba(45, 45, 55, 0.9);
+  color: var(--sidebar-text);
+}
+
+.toolbar-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #c8c0ff;
+}
+
+/* ── Inspector panel ─────────────────────────────────────────────────────── */
+
+.inspector {
+  width: 280px;
+  min-width: 280px;
+  background: var(--sidebar-bg);
+  border-left: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.inspector-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--sidebar-muted);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.inspector-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+}
+
+.inspector-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e0e0f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-type-badge {
+  padding: 4px 16px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.inspector-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 4px 16px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.inspector-badge.valid {
+  background: rgba(129, 199, 132, 0.15);
+  color: #81c784;
+}
+
+.inspector-badge.error {
+  background: rgba(255, 138, 101, 0.15);
+  color: #ff8a65;
+  display: block;
+}
+
+.inspector-errors {
+  display: flex;
+  flex-direction: column;
+}
+
+.inspector-section {
+  padding: 10px 16px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.inspector-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sidebar-muted);
+  margin-bottom: 8px;
+}
+
+.inspector-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  gap: 8px;
+}
+
+.inspector-label {
+  font-size: 0.78rem;
+  color: var(--sidebar-muted);
+  flex-shrink: 0;
+}
+
+.inspector-value {
+  font-size: 0.82rem;
+  color: var(--sidebar-text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-enum {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.inspector-muted {
+  font-size: 0.78rem;
+  color: var(--sidebar-muted);
+}
+
+.inspector-links {
+  list-style: none;
+}
+
+.inspector-link-item {
+  font-size: 0.8rem;
+  color: var(--accent);
+  padding: 2px 0;
+}
+
+/* ── Split-view layout (TASK-010) ────────────────────────────────────────── */
+
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--canvas-bg);
+  border-right: 1px solid var(--sidebar-border);
+}
+
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+  min-height: 36px;
+  gap: 8px;
+}
+
+.toggle-graph-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--sidebar-border);
+  background: transparent;
+  color: var(--sidebar-muted);
+  font-size: 0.73rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.toggle-graph-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--sidebar-text);
+}
+
+.toggle-graph-btn.active {
+  color: var(--accent);
+}
+
+.graph-panel {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  min-width: 320px;
+  max-width: 50vw;
+  overflow: hidden;
+}
+
+.graph-panel .graph-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-panel .inspector {
+  height: auto;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* ── Editor container (CodeMirror host) ──────────────────────────────────── */
+
+.editor-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--canvas-bg);
+}
+
+.editor-container .cm-editor {
+  height: 100%;
+}
+
+.editor-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sidebar-muted);
+  font-size: 0.9rem;
+}
+
+/* ── Breadcrumbs (TASK-010) ──────────────────────────────────────────────── */
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.breadcrumb-back {
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--sidebar-muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+
+.breadcrumb-back:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text);
+}
+
+.breadcrumb-back:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.breadcrumb-ellipsis {
+  color: var(--sidebar-muted);
+  font-size: 0.78rem;
+  padding: 0 4px;
+}
+
+.breadcrumb-item-wrapper {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.breadcrumb-sep {
+  color: var(--sidebar-muted);
+  font-size: 0.72rem;
+  padding: 0 4px;
+  opacity: 0.5;
+}
+
+.breadcrumb-item {
+  border: none;
+  background: transparent;
+  color: var(--sidebar-muted);
+  font-size: 0.76rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.breadcrumb-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text);
+}
+
+.breadcrumb-item.active {
+  font-weight: 600;
+}
+

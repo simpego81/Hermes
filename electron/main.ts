@@ -1,6 +1,6 @@
 /* Hermes Electron main process bootstrap. */
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
-import { readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,6 +52,21 @@ ipcMain.handle('vault:read-files', async (_event, dirPath: string) => {
   );
   return files;
 });
+
+ipcMain.handle(
+  'vault:write-file',
+  async (_event, dirPath: string, relPath: string, content: string) => {
+    const fullPath = path.join(dirPath, relPath);
+    // Ensure the target is still inside the vault directory (prevent path traversal).
+    const resolved = path.resolve(fullPath);
+    const resolvedDir = path.resolve(dirPath);
+    if (!resolved.startsWith(resolvedDir + path.sep) && resolved !== resolvedDir) {
+      throw new Error('Path traversal detected');
+    }
+    await mkdir(path.dirname(fullPath), { recursive: true });
+    await writeFile(fullPath, content, 'utf-8');
+  },
+);
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 

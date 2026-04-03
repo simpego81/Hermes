@@ -12,6 +12,7 @@ interface HermesDesktopApi {
   vault: {
     openDialog(): Promise<string | null>;
     readFiles(dirPath: string): Promise<VaultFile[]>;
+    writeFile(dirPath: string, relPath: string, content: string): Promise<void>;
   };
 }
 
