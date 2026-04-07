@@ -43,6 +43,13 @@ export function parseMarkdownDocument(source: string): ParsedDocument {
     match[1].trim(),
   );
 
+  // Also collect wiki-links from frontmatter values (e.g. owner: [[Luca]])
+  for (const val of Object.values(metadata)) {
+    if (Array.isArray(val)) {
+      links.push(...val);
+    }
+  }
+
   return {
     metadata,
     body,

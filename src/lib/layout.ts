@@ -92,13 +92,13 @@ function getDeadlineMs(page: HermesPage): number | null {
 
 /**
  * Map page ids (task/objective pages with a valid deadline) to an x
- * coordinate along the timeline axis.
+ * coordinate along the timeline axis, plus the page type for vertical layering.
  * x ∈ [-canvasW/2 + PAD, canvasW/2 - PAD], sorted oldest → newest.
  */
 export function computeTimelinePositions(
   pages: HermesPage[],
   canvasW: number,
-): Map<string, number> {
+): Map<string, { x: number; type: PageType }> {
   const PAD = 90;
   const withDeadline = pages
     .filter((p) => (p.type === 'task' || p.type === 'objective') && getDeadlineMs(p) !== null);
@@ -113,12 +113,52 @@ export function computeTimelinePositions(
   const xMin = -canvasW / 2 + PAD;
   const xMax = canvasW / 2 - PAD;
 
-  const result = new Map<string, number>();
+  const result = new Map<string, { x: number; type: PageType }>();
   withDeadline.forEach((p) => {
     const t = (getDeadlineMs(p)! - minT) / range;
-    result.set(p.id, xMin + t * (xMax - xMin));
+    result.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type });
   });
   return result;
+}
+
+export interface TimelineLane {
+  type: PageType;
+  cx: number;
+  cy: number;
+  hw: number;
+  hh: number;
+}
+
+/**
+ * Compute horizontal "swim lanes" for the timeline view.
+ * Each lane spans the full timeline width and has a reduced height.
+ * Objective lane sits closer to the axis, task lane sits below.
+ */
+export function computeTimelineLanes(
+  canvasW: number,
+  canvasH: number,
+  timelineY: number,
+): TimelineLane[] {
+  const PAD_X = 50;
+  const LANE_H = 50;    // half-height of each lane
+  const GAP = 16;       // gap between lanes
+  const TOP_OFFSET = 50; // distance from timeline axis to first lane top
+
+  const hw = canvasW / 2 - PAD_X;
+
+  // Objectives closer to the timeline axis, tasks below
+  const lanes: { type: PageType; order: number }[] = [
+    { type: 'objective', order: 0 },
+    { type: 'task', order: 1 },
+  ];
+
+  return lanes.map(({ type, order }) => ({
+    type,
+    cx: 0,
+    cy: timelineY + TOP_OFFSET + LANE_H + order * (LANE_H * 2 + GAP),
+    hw,
+    hh: LANE_H,
+  }));
 }
 
 /** Return the deadline string for display (null if absent/invalid). */

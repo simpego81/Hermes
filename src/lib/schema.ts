@@ -15,7 +15,7 @@ export interface SchemaField {
 
 export type SchemaDefinition = Record<string, SchemaField>;
 
-const TASK_STATUSES = ['TO-DO', 'DOING', 'DONE', 'BLOCKED'];
+const TASK_STATUSES = ['TO-DO', 'WAITING', 'ANALYZING', 'IN PROGRESS', 'READY', 'DONE'];
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 export const PAGE_SCHEMAS: Record<PageType, SchemaDefinition> = {
@@ -28,6 +28,7 @@ export const PAGE_SCHEMAS: Record<PageType, SchemaDefinition> = {
     deadline: { required: false, label: 'Deadline', type: 'date' },
     priority: { required: true, label: 'Priority', type: 'enum', options: PRIORITIES },
     assignees: { required: false, label: 'Assignees', type: 'links' },
+    blocked_by: { required: false, label: 'Blocked by', type: 'links' },
     dependencies: { required: false, label: 'Dependencies', type: 'links' },
   },
   objective: {
@@ -75,6 +76,27 @@ export function validatePage(
         errors.push({
           field,
           message: `"${def.label}" must be a valid date (YYYY-MM-DD). Got "${scalar}".`,
+        });
+      }
+    }
+  }
+
+  // TASK-033: WAITING status requires blocked_by or assignee referencing a persona
+  if (type === 'task') {
+    const status = typeof metadata.status === 'string' ? metadata.status : metadata.status?.[0];
+    if (status === 'WAITING') {
+      const blockedBy = metadata.blocked_by;
+      const assignees = metadata.assignees;
+      const hasBlocker =
+        (Array.isArray(blockedBy) && blockedBy.length > 0) ||
+        (typeof blockedBy === 'string' && blockedBy.trim() !== '');
+      const hasAssignee =
+        (Array.isArray(assignees) && assignees.length > 0) ||
+        (typeof assignees === 'string' && assignees.trim() !== '');
+      if (!hasBlocker && !hasAssignee) {
+        errors.push({
+          field: 'blocked_by',
+          message: 'WAITING status requires "blocked_by" or "assignees" referencing a persona.',
         });
       }
     }

@@ -18,6 +18,7 @@ interface SidebarProps {
   onPageSelect(id: string): void;
   onSearchChange(query: string): void;
   onOpenVault(): void;
+  onDelete?(id: string): void;
 }
 
 export function Sidebar({
@@ -28,6 +29,7 @@ export function Sidebar({
   onPageSelect,
   onSearchChange,
   onOpenVault,
+  onDelete,
 }: SidebarProps) {
   const lc = searchQuery.toLowerCase();
   const filtered = searchQuery
@@ -94,6 +96,13 @@ export function Sidebar({
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') onPageSelect(page.id);
+                    }}
+                    onContextMenu={(e) => {
+                      if (!onDelete) return;
+                      e.preventDefault();
+                      if (window.confirm(`Delete "${page.title}"?`)) {
+                        onDelete(page.id);
+                      }
                     }}
                     aria-current={selectedId === page.id ? 'page' : undefined}
                   >

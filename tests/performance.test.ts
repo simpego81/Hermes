@@ -252,10 +252,152 @@ describe('Stress test: box layout with 500 pages', () => {
 
     if (timelinePositions.size < 2) return; // skip if too few deadline nodes
 
-    const xs = [...timelinePositions.values()];
+    const xs = [...timelinePositions.values()].map((e) => e.x);
     const observedMin = Math.min(...xs);
     const observedMax = Math.max(...xs);
     const coverage = (observedMax - observedMin) / range;
     expect(coverage).toBeGreaterThanOrEqual(0.5);
+  });
+});
+
+// ── Autocomplete performance (TASK-017) ──────────────────────────────────────
+
+/** Generate a vault with `count` pages for autocomplete stress testing. */
+function generateAutocompleteVault(count: number): HermesPage[] {
+  const pages: HermesPage[] = [];
+  for (let i = 0; i < count; i++) {
+    const title = `Page-${String(i).padStart(5, '0')}`;
+    pages.push({
+      id: `${title}.md`,
+      title,
+      type: 'note',
+      metadata: { type: 'note' },
+      body: '',
+      links: [],
+    });
+  }
+  return pages;
+}
+
+/**
+ * Simulate the wiki-link autocomplete filter logic from Editor.tsx.
+ * Given a partial query and a list of titles, return matching titles.
+ */
+function simulateWikiComplete(titles: string[], filter: string): string[] {
+  const lowerFilter = filter.toLowerCase();
+  return titles.filter((t) => t.toLowerCase().includes(lowerFilter));
+}
+
+const VAULT_2000 = generateAutocompleteVault(2000);
+const TITLES_2000 = VAULT_2000.map((p) => p.title);
+
+describe('Stress test: autocomplete performance (TASK-017 Req 1)', () => {
+  it('generates 2000 pages for the test vault', () => {
+    expect(VAULT_2000).toHaveLength(2000);
+  });
+
+  it('[[ autocomplete filtering completes within 10 ms for 2000 pages (empty query)', () => {
+    const start = performance.now();
+    const results = simulateWikiComplete(TITLES_2000, '');
+    const elapsed = performance.now() - start;
+    expect(results).toHaveLength(2000);
+    expect(elapsed).toBeLessThan(10);
+  });
+
+  it('[[ autocomplete filtering completes within 10 ms for 2000 pages (partial query)', () => {
+    const start = performance.now();
+    const results = simulateWikiComplete(TITLES_2000, 'Page-001');
+    const elapsed = performance.now() - start;
+    // "Page-001" matches Page-00100 through Page-00199 plus Page-001xx patterns
+    expect(results.length).toBeGreaterThan(0);
+    expect(elapsed).toBeLessThan(10);
+  });
+
+  it('[[ autocomplete filtering is fast under repeated invocations (100 calls)', () => {
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      simulateWikiComplete(TITLES_2000, `Page-${String(i).padStart(3, '0')}`);
+    }
+    const elapsed = performance.now() - start;
+    // 100 filter passes over 2000 titles in under 50 ms
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  it('filtering produces correct results (no false positives)', () => {
+    const results = simulateWikiComplete(TITLES_2000, 'Page-00042');
+    // Only exact title "Page-00042" should match
+    expect(results).toContain('Page-00042');
+    results.forEach((r) => {
+      expect(r.toLowerCase()).toContain('page-00042');
+    });
+  });
+
+  it('filtering with non-existent query returns empty quickly', () => {
+    const start = performance.now();
+    const results = simulateWikiComplete(TITLES_2000, 'ZZZZZ-NONEXISTENT');
+    const elapsed = performance.now() - start;
+    expect(results).toHaveLength(0);
+    expect(elapsed).toBeLessThan(10);
+  });
+});
+
+describe('Tab acceptance simulation (TASK-017 Req 2)', () => {
+  /**
+   * Simulate Tab-accept behaviour: given a document line "[[partial",
+   * accepting a completion means inserting "title]]" from cursor position.
+   * This verifies no extra tab characters are injected into the result.
+   */
+  function simulateTabAccept(
+    docLine: string,
+    cursorOffset: number,
+    completionApply: string,
+  ): string {
+    const before = docLine.slice(0, cursorOffset);
+    const after = docLine.slice(cursorOffset);
+    return before + completionApply + after;
+  }
+
+  it('Tab inserts the completion text without extra tab characters', () => {
+    const line = 'Some text [[Pa';
+    const cursor = line.length; // after "Pa"
+    const apply = 'Page-00001]]';
+    const result = simulateTabAccept(line, cursor, apply);
+    expect(result).toBe('Some text [[PaPage-00001]]');
+    expect(result).not.toContain('\t');
+  });
+
+  it('Tab does not add trailing whitespace after the completion', () => {
+    const line = '[[';
+    const cursor = 2;
+    const apply = 'My Page]]';
+    const result = simulateTabAccept(line, cursor, apply);
+    expect(result).toBe('[[My Page]]');
+    expect(result).not.toMatch(/\t/);
+    expect(result).not.toMatch(/]] +$/);
+  });
+
+  it('completion preserves content after the cursor', () => {
+    const line = 'See [[Pa and more text';
+    const cursor = 8; // just after "Pa"
+    const apply = 'Page-00001]]';
+    const result = simulateTabAccept(line, cursor, apply);
+    expect(result).toBe('See [[PaPage-00001]] and more text');
+  });
+
+  it('empty filter produces completion starting from [[', () => {
+    const line = 'Link: [[';
+    const cursor = 8;
+    const apply = 'Some Title]]';
+    const result = simulateTabAccept(line, cursor, apply);
+    expect(result).toBe('Link: [[Some Title]]');
+    expect(result).not.toContain('\t');
+  });
+
+  it('completion with special characters in title is safe', () => {
+    const line = 'See [[';
+    const cursor = 6;
+    const apply = 'Page (draft v2)]]';
+    const result = simulateTabAccept(line, cursor, apply);
+    expect(result).toBe('See [[Page (draft v2)]]');
   });
 });

@@ -10,7 +10,7 @@ import { validatePage } from '../src/lib/schema';
 describe('validatePage — task', () => {
   it('passes a fully valid task with no errors', () => {
     const errors = validatePage('task', {
-      status: 'DOING',
+      status: 'IN PROGRESS',
       priority: 'HIGH',
       deadline: '2026-06-01',
       assignees: ['Alice'],
@@ -74,6 +74,104 @@ describe('validatePage — task', () => {
     const errors = validatePage('task', { status: 'TO-DO', priority: 'LOW' });
     expect(errors.some((e) => e.field === 'assignees')).toBe(false);
     expect(errors.some((e) => e.field === 'dependencies')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task status values (TASK-034)
+// ---------------------------------------------------------------------------
+
+describe('validatePage — task status values (TASK-034)', () => {
+  const validStatuses = ['TO-DO', 'WAITING', 'ANALYZING', 'IN PROGRESS', 'READY', 'DONE'];
+
+  it.each(validStatuses)('accepts valid status "%s"', (status) => {
+    const errors = validatePage('task', { status, priority: 'LOW' });
+    const statusErr = errors.find((e) => e.field === 'status');
+    expect(statusErr).toBeUndefined();
+  });
+
+  const invalidStatuses = ['DOING', 'BLOCKED', 'PENDING', 'OPEN', 'CLOSED', 'doing', ''];
+
+  it.each(invalidStatuses.filter(Boolean))('rejects old/invalid status "%s"', (status) => {
+    const errors = validatePage('task', { status, priority: 'LOW' });
+    const statusErr = errors.find((e) => e.field === 'status');
+    expect(statusErr).toBeDefined();
+    expect(statusErr!.message).toContain(status);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WAITING conditional validation (TASK-034)
+// ---------------------------------------------------------------------------
+
+describe('validatePage — WAITING conditional rule (TASK-034)', () => {
+  it('WAITING without blocked_by or assignees generates an error', () => {
+    const errors = validatePage('task', { status: 'WAITING', priority: 'HIGH' });
+    const blockerErr = errors.find((e) => e.field === 'blocked_by');
+    expect(blockerErr).toBeDefined();
+    expect(blockerErr!.message).toMatch(/WAITING/i);
+  });
+
+  it('WAITING with blocked_by (array) passes', () => {
+    const errors = validatePage('task', {
+      status: 'WAITING',
+      priority: 'HIGH',
+      blocked_by: ['Alice'],
+    });
+    expect(errors.find((e) => e.field === 'blocked_by')).toBeUndefined();
+  });
+
+  it('WAITING with blocked_by (string) passes', () => {
+    const errors = validatePage('task', {
+      status: 'WAITING',
+      priority: 'HIGH',
+      blocked_by: 'Bob',
+    });
+    expect(errors.find((e) => e.field === 'blocked_by')).toBeUndefined();
+  });
+
+  it('WAITING with assignees (array) passes', () => {
+    const errors = validatePage('task', {
+      status: 'WAITING',
+      priority: 'HIGH',
+      assignees: ['Carol'],
+    });
+    expect(errors.find((e) => e.field === 'blocked_by')).toBeUndefined();
+  });
+
+  it('WAITING with assignees (string) passes', () => {
+    const errors = validatePage('task', {
+      status: 'WAITING',
+      priority: 'HIGH',
+      assignees: 'Dave',
+    });
+    expect(errors.find((e) => e.field === 'blocked_by')).toBeUndefined();
+  });
+
+  it('WAITING with empty blocked_by and empty assignees still errors', () => {
+    const errors = validatePage('task', {
+      status: 'WAITING',
+      priority: 'HIGH',
+      blocked_by: [],
+      assignees: [],
+    });
+    expect(errors.find((e) => e.field === 'blocked_by')).toBeDefined();
+  });
+
+  it('WAITING with whitespace-only blocked_by still errors', () => {
+    const errors = validatePage('task', {
+      status: 'WAITING',
+      priority: 'HIGH',
+      blocked_by: '  ',
+    });
+    expect(errors.find((e) => e.field === 'blocked_by')).toBeDefined();
+  });
+
+  it('non-WAITING statuses do not trigger the blocked_by rule', () => {
+    for (const status of ['TO-DO', 'ANALYZING', 'IN PROGRESS', 'READY', 'DONE']) {
+      const errors = validatePage('task', { status, priority: 'LOW' });
+      expect(errors.find((e) => e.field === 'blocked_by')).toBeUndefined();
+    }
   });
 });
 

@@ -26,6 +26,8 @@ No extra links here.`);
 
     expect(parsed.metadata.assignees).toEqual(['Mario Rossi', 'Giulia Verdi']);
     expect(parsed.metadata.dependencies).toEqual(['TASK-001']);
-    expect(parsed.links).toEqual([]);
+    // Frontmatter wiki-links are now included in the links array
+    expect(parsed.links).toEqual(expect.arrayContaining(['Mario Rossi', 'Giulia Verdi', 'TASK-001']));
+    expect(parsed.links).toHaveLength(3);
   });
 });

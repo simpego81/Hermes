@@ -1,12 +1,23 @@
 /* Hermes Inspector — side panel for viewing and editing page metadata. */
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { HermesPage } from '../lib/types';
 import { PAGE_COLORS, PAGE_TYPE_LABELS } from '../lib/types';
 import { PAGE_SCHEMAS, validatePage } from '../lib/schema';
 import type { SchemaField } from '../lib/schema';
+import {
+  findBacklinks,
+  findBrokenLinks,
+  getPersonaAggregates,
+  getObjectiveAggregates,
+} from '../lib/vault';
+import type { BrokenLink } from '../lib/vault';
 
 interface InspectorProps {
   page: HermesPage | null;
+  pages: HermesPage[];
+  onNavigate?: (title: string) => void;
+  onRename?: (oldTitle: string, newTitle: string) => void;
+  onDelete?: (id: string) => void;
 }
 
 function FieldEditor({
@@ -50,10 +61,33 @@ function ValidationBadge({ errors }: { errors: { field: string; message: string 
   );
 }
 
-export function Inspector({ page }: InspectorProps) {
+export function Inspector({ page, pages, onNavigate, onRename, onDelete }: InspectorProps) {
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+
   const errors = useMemo(
     () => (page ? validatePage(page.type, page.metadata) : []),
     [page],
+  );
+
+  const backlinks = useMemo(
+    () => (page ? findBacklinks(pages, page.title) : []),
+    [pages, page],
+  );
+
+  const personaAgg = useMemo(
+    () => (page?.type === 'persona' ? getPersonaAggregates(pages, page.title) : null),
+    [pages, page],
+  );
+
+  const objectiveAgg = useMemo(
+    () => (page?.type === 'objective' ? getObjectiveAggregates(pages, page) : null),
+    [pages, page],
+  );
+
+  const brokenLinks = useMemo(
+    () => (page ? findBrokenLinks(pages).filter((b) => b.pageId === page.id) : []),
+    [pages, page],
   );
 
   if (!page) {
@@ -80,7 +114,70 @@ export function Inspector({ page }: InspectorProps) {
           style={{ background: PAGE_COLORS[page.type] }}
           aria-hidden="true"
         />
-        <span className="inspector-title">{page.title}</span>
+        {editingTitle ? (
+          <input
+            className="inspector-title-input"
+            value={titleDraft}
+            autoFocus
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => {
+              setEditingTitle(false);
+              if (titleDraft.trim() && titleDraft !== page.title) {
+                onRename?.(page.title, titleDraft.trim());
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                (e.target as HTMLInputElement).blur();
+              }
+              if (e.key === 'Escape') {
+                setEditingTitle(false);
+              }
+            }}
+          />
+        ) : (
+          <>
+            <span
+              className={`inspector-title${onRename ? ' editable' : ''}`}
+              onDoubleClick={() => {
+                if (onRename) {
+                  setTitleDraft(page.title);
+                  setEditingTitle(true);
+                }
+              }}
+              title={onRename ? 'Double-click to rename' : undefined}
+            >
+              {page.title}
+            </span>
+            {onRename && (
+              <button
+                className="inspector-rename-btn"
+                onClick={() => {
+                  setTitleDraft(page.title);
+                  setEditingTitle(true);
+                }}
+                title="Rename page"
+                type="button"
+              >
+                ✎
+              </button>
+            )}
+            {onDelete && (
+              <button
+                className="inspector-delete-btn"
+                onClick={() => {
+                  if (window.confirm(`Delete "${page.title}"? This cannot be undone.`)) {
+                    onDelete(page.id);
+                  }
+                }}
+                title="Delete page"
+                type="button"
+              >
+                🗑
+              </button>
+            )}
+          </>
+        )}
       </header>
 
       <div className="inspector-type-badge" style={{ color: PAGE_COLORS[page.type] }}>
@@ -126,7 +223,81 @@ export function Inspector({ page }: InspectorProps) {
           <ul className="inspector-links">
             {page.links.map((link) => (
               <li key={link} className="inspector-link-item">
-                [[{link}]]
+                <button
+                  className="inspector-link-btn"
+                  onClick={() => onNavigate?.(link)}
+                  type="button"
+                >
+                  [[{link}]]
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {backlinks.length > 0 && (
+        <section className="inspector-section">
+          <h3 className="inspector-section-title">Backlinks</h3>
+          <ul className="inspector-links">
+            {backlinks.map((title) => (
+              <li key={title} className="inspector-link-item">
+                <button
+                  className="inspector-link-btn"
+                  onClick={() => onNavigate?.(title)}
+                  type="button"
+                >
+                  [[{title}]]
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {personaAgg && (
+        <section className="inspector-section">
+          <h3 className="inspector-section-title">Aggregates</h3>
+          <div className="inspector-field">
+            <label className="inspector-label">Tasks assigned</label>
+            <span className="inspector-value">{personaAgg.taskCount}</span>
+          </div>
+          <div className="inspector-field">
+            <label className="inspector-label">Objectives linked</label>
+            <span className="inspector-value">{personaAgg.objectiveCount}</span>
+          </div>
+        </section>
+      )}
+
+      {objectiveAgg && (
+        <section className="inspector-section">
+          <h3 className="inspector-section-title">Task progress</h3>
+          <div className="inspector-field">
+            <label className="inspector-label">Completed</label>
+            <span className="inspector-value">
+              {objectiveAgg.completedTasks}/{objectiveAgg.totalTasks}
+            </span>
+          </div>
+          <div className="inspector-progress-bar">
+            <div
+              className="inspector-progress-fill"
+              style={{
+                width: objectiveAgg.totalTasks
+                  ? `${(objectiveAgg.completedTasks / objectiveAgg.totalTasks) * 100}%`
+                  : '0%',
+              }}
+            />
+          </div>
+        </section>
+      )}
+
+      {brokenLinks.length > 0 && (
+        <section className="inspector-section">
+          <h3 className="inspector-section-title">⚠ Broken links</h3>
+          <ul className="inspector-links">
+            {brokenLinks.map((b) => (
+              <li key={b.brokenLink} className="inspector-link-item inspector-broken-link">
+                [[{b.brokenLink}]]
               </li>
             ))}
           </ul>

@@ -270,6 +270,24 @@ body,
   color: #c8c0ff;
 }
 
+.toolbar-select {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(30, 30, 40, 0.9);
+  color: #c8c0ff;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+.toolbar-select:hover,
+.toolbar-select:focus {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
 /* ── Inspector panel ─────────────────────────────────────────────────────── */
 
 .inspector {
@@ -310,6 +328,65 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: default;
+  flex: 1;
+  min-width: 0;
+}
+
+.inspector-title.editable {
+  cursor: text;
+  border-bottom: 1px dashed rgba(160, 140, 255, 0.35);
+}
+
+.inspector-title.editable:hover {
+  border-bottom-color: var(--accent);
+  color: #fff;
+}
+
+.inspector-rename-btn {
+  background: none;
+  border: none;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.inspector-rename-btn:hover {
+  color: var(--accent);
+  background: rgba(160, 140, 255, 0.12);
+}
+
+.inspector-delete-btn {
+  background: none;
+  border: none;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.inspector-delete-btn:hover {
+  color: #ff5555;
+  background: rgba(255, 85, 85, 0.12);
+}
+
+.inspector-title-input {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e0e0f0;
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 4px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .inspector-type-badge {
@@ -403,7 +480,168 @@ body,
   padding: 2px 0;
 }
 
-/* ── Split-view layout (TASK-010) ────────────────────────────────────────── */
+.inspector-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  transition: color 0.12s;
+}
+
+.inspector-link-btn:hover {
+  color: #b0a8ff;
+  text-decoration: underline;
+}
+
+.inspector-broken-link {
+  color: #ff8a65;
+}
+
+.inspector-progress-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.inspector-progress-fill {
+  height: 100%;
+  background: #81c784;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ── Split-view layout (TASK-010, TASK-041 refactored) ────────────────────── */
+
+.center-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.center-graph {
+  height: 45%;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--sidebar-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.center-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--canvas-bg);
+}
+
+.right-panel {
+  width: 260px;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--sidebar-border);
+  background: var(--sidebar-bg);
+}
+
+.right-panel .inspector {
+  border-left: none;
+  width: auto;
+  min-width: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* ── Task List panel (TASK-041) ──────────────────────────────────────────── */
+
+.task-list-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.task-list-header {
+  padding: 12px 16px 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #e0e0f0;
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+}
+
+.task-list-section {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.task-list-section-title {
+  padding: 4px 16px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sidebar-muted);
+}
+
+.task-list-items {
+  list-style: none;
+}
+
+.task-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 16px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--sidebar-text);
+  border-radius: 6px;
+  margin: 0 6px;
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.task-list-item:hover {
+  background: var(--sidebar-hover);
+}
+
+.task-list-item.active {
+  background: var(--sidebar-active);
+  color: #c8c0ff;
+}
+
+.task-list-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.task-list-item-priority {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--sidebar-muted);
+  margin-left: 8px;
+}
+
+.task-list-empty {
+  padding: 8px 16px;
+  font-size: 0.78rem;
+  color: var(--sidebar-muted);
+}
 
 .editor-area {
   flex: 1;
@@ -468,6 +706,13 @@ body,
   height: auto;
   max-height: 260px;
   overflow-y: auto;
+}
+
+/* ── Center graph area ─────────────────────────────────────────────────── */
+
+.center-graph .graph-area {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Editor container (CodeMirror host) ──────────────────────────────────── */
@@ -565,5 +810,239 @@ body,
 
 .breadcrumb-item.active {
   font-weight: 600;
+}
+
+/* ── Command Palette (TASK-013) ──────────────────────────────────────────── */
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  backdrop-filter: blur(2px);
+}
+
+.palette {
+  width: 480px;
+  max-width: 90vw;
+  background: #252530;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.palette-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e0e0f0;
+  outline: none;
+}
+
+.palette-input::placeholder {
+  color: var(--sidebar-muted);
+}
+
+.palette-list {
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--sidebar-text);
+  transition: background 0.08s;
+}
+
+.palette-item:hover,
+.palette-item.selected {
+  background: var(--accent-soft);
+  color: #e0e0f0;
+}
+
+.palette-item-kind {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+.palette-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--sidebar-muted);
+  font-size: 0.84rem;
+}
+
+/* ── Creation Wizard (TASK-023) ──────────────────────────────────────────── */
+
+.wizard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.wizard {
+  background: #252530;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: 380px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.wizard-title {
+  margin: 0 0 18px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e0e0f0;
+}
+
+.wizard-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--sidebar-text-dim);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.wizard-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background: rgba(30, 30, 40, 0.9);
+  color: #e0e0f0;
+  border: 1px solid rgba(100, 100, 130, 0.32);
+  border-radius: 6px;
+  outline: none;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.wizard-input:focus {
+  border-color: var(--accent);
+}
+
+.wizard-type-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.wizard-type-btn {
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(30, 30, 40, 0.8);
+  color: var(--sidebar-text-dim);
+  border: 1px solid rgba(100, 100, 130, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.wizard-type-btn:hover {
+  background: rgba(45, 45, 55, 0.9);
+  color: var(--sidebar-text);
+}
+
+.wizard-type-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: #c8c0ff;
+}
+
+.wizard-hint {
+  color: var(--sidebar-muted);
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.wizard-kbd {
+  display: inline-block;
+  background: rgba(100, 100, 140, 0.2);
+  border: 1px solid rgba(100, 100, 140, 0.35);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: 'Segoe UI', system-ui, monospace;
+  font-size: 0.8rem;
+  margin-right: 4px;
+  color: var(--accent);
+}
+
+.wizard-selected-type {
+  color: var(--sidebar-text);
+  font-size: 0.85rem;
+}
+
+.wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.wizard-cancel {
+  padding: 7px 16px;
+  font-size: 0.82rem;
+  background: transparent;
+  color: var(--sidebar-text-dim);
+  border: 1px solid rgba(100, 100, 130, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wizard-cancel:hover {
+  color: var(--sidebar-text);
+  background: rgba(45, 45, 55, 0.6);
+}
+
+.wizard-confirm {
+  padding: 7px 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wizard-confirm:hover {
+  filter: brightness(1.15);
+}
+
+.wizard-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 

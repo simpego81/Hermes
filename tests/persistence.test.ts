@@ -4,7 +4,7 @@
 import { mkdtemp, readFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, unlink, rename, stat } from 'node:fs/promises';
 import { pageFromSource, buildGraphData } from '../src/lib/vault';
 
 // ── Path-traversal validation (mirrors electron/main.ts logic) ──────────────
@@ -233,5 +233,130 @@ describe('Sudden-close resilience', () => {
     const read = await readFile(join(vaultDir, relPath), 'utf-8');
     const page = pageFromSource(relPath, read);
     expect(page.body).toContain('Original content');
+  });
+});
+
+// ── File deletion (TASK-031 Req 2) ─────────────────────────────────────────
+
+describe('File deletion from vault (TASK-031)', () => {
+  let vaultDir: string;
+
+  beforeEach(async () => {
+    vaultDir = await mkdtemp(join(tmpdir(), 'hermes-del-'));
+  });
+
+  afterEach(async () => {
+    await rm(vaultDir, { recursive: true, force: true });
+  });
+
+  it('unlink removes the file from disk', async () => {
+    const relPath = 'to-delete.md';
+    const fullPath = join(vaultDir, relPath);
+    await writeFile(fullPath, `---\ntype: note\n---\n\nBye.`, 'utf-8');
+
+    // Verify file exists
+    const before = await stat(fullPath);
+    expect(before.isFile()).toBe(true);
+
+    // Delete
+    await unlink(fullPath);
+
+    // Verify file is gone
+    await expect(stat(fullPath)).rejects.toThrow();
+  });
+
+  it('deleted file no longer appears in vault readdir', async () => {
+    await writeFile(join(vaultDir, 'keep.md'), '---\ntype: note\n---\n\nKeep.', 'utf-8');
+    await writeFile(join(vaultDir, 'remove.md'), '---\ntype: note\n---\n\nRemove.', 'utf-8');
+
+    await unlink(join(vaultDir, 'remove.md'));
+
+    const entries = await readdir(vaultDir);
+    expect(entries).toContain('keep.md');
+    expect(entries).not.toContain('remove.md');
+  });
+
+  it('vault reload after deletion shows fewer pages', async () => {
+    const files = [
+      { id: 'a.md', content: `---\ntype: task\n---\n\nTask A.` },
+      { id: 'b.md', content: `---\ntype: note\n---\n\nNote B.` },
+      { id: 'c.md', content: `---\ntype: note\n---\n\nNote C.` },
+    ];
+    for (const f of files) {
+      await writeFile(join(vaultDir, f.id), f.content, 'utf-8');
+    }
+
+    // Delete b.md
+    await unlink(join(vaultDir, 'b.md'));
+
+    // Reload vault
+    const entries = await readdir(vaultDir);
+    const loaded = await Promise.all(
+      entries.filter((e) => e.endsWith('.md')).map(async (name) => {
+        const content = await readFile(join(vaultDir, name), 'utf-8');
+        return pageFromSource(name, content);
+      }),
+    );
+
+    expect(loaded).toHaveLength(2);
+    expect(loaded.map((p) => p.id).sort()).toEqual(['a.md', 'c.md']);
+  });
+
+  it('deleting a non-existent file throws', async () => {
+    await expect(unlink(join(vaultDir, 'ghost.md'))).rejects.toThrow();
+  });
+
+  it('path-traversal is blocked for delete targets', () => {
+    expect(isPathSafe('/vault', '../escape.md')).toBe(false);
+    expect(isPathSafe('/vault', 'sub/../../etc/passwd')).toBe(false);
+    expect(isPathSafe('/vault', 'legit.md')).toBe(true);
+  });
+});
+
+// ── File rename on disk (TASK-031 Req 3) ────────────────────────────────────
+
+describe('File rename on disk (TASK-031)', () => {
+  let vaultDir: string;
+
+  beforeEach(async () => {
+    vaultDir = await mkdtemp(join(tmpdir(), 'hermes-ren-'));
+  });
+
+  afterEach(async () => {
+    await rm(vaultDir, { recursive: true, force: true });
+  });
+
+  it('rename moves the file to a new name, old path gone', async () => {
+    const oldPath = join(vaultDir, 'old.md');
+    const newPath = join(vaultDir, 'new.md');
+    await writeFile(oldPath, '---\ntype: note\n---\n\nContent.', 'utf-8');
+
+    await rename(oldPath, newPath);
+
+    await expect(stat(oldPath)).rejects.toThrow();
+    const read = await readFile(newPath, 'utf-8');
+    expect(read).toContain('Content.');
+  });
+
+  it('rename preserves file content exactly', async () => {
+    const content = `---\ntype: task\nstatus: DOING\npriority: HIGH\n---\n\nFull content with [[Some Link]].`;
+    const oldPath = join(vaultDir, 'original.md');
+    const newPath = join(vaultDir, 'renamed.md');
+    await writeFile(oldPath, content, 'utf-8');
+
+    await rename(oldPath, newPath);
+
+    const read = await readFile(newPath, 'utf-8');
+    expect(read).toBe(content);
+  });
+
+  it('vault reload after rename shows the new filename', async () => {
+    await writeFile(join(vaultDir, 'alpha.md'), '---\ntype: note\n---\n\nA.', 'utf-8');
+    await writeFile(join(vaultDir, 'beta.md'), '---\ntype: note\n---\n\nB.', 'utf-8');
+
+    await rename(join(vaultDir, 'alpha.md'), join(vaultDir, 'gamma.md'));
+
+    const entries = await readdir(vaultDir);
+    expect(entries.sort()).toEqual(['beta.md', 'gamma.md']);
   });
 });

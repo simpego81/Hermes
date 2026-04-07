@@ -24,7 +24,6 @@ type: persona
 type: task
 status: TO-DO
 priority: MEDIUM
-deadline: ${new Date().toISOString().slice(0, 10)}
 assignees:
 dependencies:
 ---`,
@@ -35,7 +34,6 @@ dependencies:
     label: 'Objective',
     frontmatter: `---
 type: objective
-deadline: ${new Date().toISOString().slice(0, 10)}
 tasks:
 dependencies:
 stakeholders:

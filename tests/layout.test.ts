@@ -219,8 +219,8 @@ describe('computeTimelinePositions', () => {
       makePage('late', 'task', { deadline: '2027-12-31' }),
     ];
     const result = computeTimelinePositions(pages, CANVAS_W);
-    expect(result.get('early')).toBeCloseTo(xMin, 3);
-    expect(result.get('late')).toBeCloseTo(xMax, 3);
+    expect(result.get('early')!.x).toBeCloseTo(xMin, 3);
+    expect(result.get('late')!.x).toBeCloseTo(xMax, 3);
   });
 
   it('all x values fall within [xMin, xMax]', () => {
@@ -231,16 +231,16 @@ describe('computeTimelinePositions', () => {
       makePage('T4', 'task', { deadline: '2026-03-20' }),
     ];
     const result = computeTimelinePositions(pages, CANVAS_W);
-    result.forEach((x) => {
-      expect(x).toBeGreaterThanOrEqual(xMin - 0.001);
-      expect(x).toBeLessThanOrEqual(xMax + 0.001);
+    result.forEach((entry) => {
+      expect(entry.x).toBeGreaterThanOrEqual(xMin - 0.001);
+      expect(entry.x).toBeLessThanOrEqual(xMax + 0.001);
     });
   });
 
   it('a single deadline maps to xMin (range = 1, t = 0)', () => {
     const pages = [makePage('only', 'task', { deadline: '2026-06-01' })];
     const result = computeTimelinePositions(pages, CANVAS_W);
-    expect(result.get('only')).toBeCloseTo(xMin, 3);
+    expect(result.get('only')!.x).toBeCloseTo(xMin, 3);
   });
 
   it('two identical deadlines are placed at the same x coordinate', () => {
@@ -250,8 +250,8 @@ describe('computeTimelinePositions', () => {
     ];
     const result = computeTimelinePositions(pages, CANVAS_W);
     // both have t=0 → both at xMin
-    expect(result.get('T1')).toBeCloseTo(xMin, 3);
-    expect(result.get('T2')).toBeCloseTo(xMin, 3);
+    expect(result.get('T1')!.x).toBeCloseTo(xMin, 3);
+    expect(result.get('T2')!.x).toBeCloseTo(xMin, 3);
   });
 
   it('excludes task pages with an invalid deadline format', () => {
@@ -271,9 +271,9 @@ describe('computeTimelinePositions', () => {
       makePage('T3', 'task', { deadline: '2026-12-01' }),
     ];
     const result = computeTimelinePositions(pages, CANVAS_W);
-    const x1 = result.get('T1')!;
-    const x2 = result.get('T2')!;
-    const x3 = result.get('T3')!;
+    const x1 = result.get('T1')!.x;
+    const x2 = result.get('T2')!.x;
+    const x3 = result.get('T3')!.x;
     expect(x1).toBeLessThan(x2);
     expect(x2).toBeLessThan(x3);
   });
