@@ -18,6 +18,8 @@ interface InspectorProps {
   onNavigate?: (title: string) => void;
   onRename?: (oldTitle: string, newTitle: string) => void;
   onDelete?: (id: string) => void;
+  /** Apre il wizard con il nome pre-compilato per creare una pagina da un link vuoto. */
+  onCreatePage?: (name: string) => void;
 }
 
 function FieldEditor({
@@ -61,7 +63,7 @@ function ValidationBadge({ errors }: { errors: { field: string; message: string 
   );
 }
 
-export function Inspector({ page, pages, onNavigate, onRename, onDelete }: InspectorProps) {
+export function Inspector({ page, pages, onNavigate, onRename, onDelete, onCreatePage }: InspectorProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
@@ -295,9 +297,19 @@ export function Inspector({ page, pages, onNavigate, onRename, onDelete }: Inspe
         <section className="inspector-section">
           <h3 className="inspector-section-title">⚠ Broken links</h3>
           <ul className="inspector-links">
-            {brokenLinks.map((b) => (
+            {brokenLinks.map((b: BrokenLink) => (
               <li key={b.brokenLink} className="inspector-link-item inspector-broken-link">
-                [[{b.brokenLink}]]
+                <span className="inspector-broken-link-name">[[{b.brokenLink}]]</span>
+                {onCreatePage && (
+                  <button
+                    className="inspector-create-btn"
+                    type="button"
+                    title={`Crea la pagina “${b.brokenLink}”`}
+                    onClick={() => onCreatePage(b.brokenLink)}
+                  >
+                    + Create
+                  </button>
+                )}
               </li>
             ))}
           </ul>

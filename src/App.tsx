@@ -26,6 +26,7 @@ export default function App() {
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [navForward, setNavForward] = useState<string[]>([]);
   const [showGraph, setShowGraph] = useState(true);
+  const [fullscreenGraph, setFullscreenGraph] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardPrefilledName, setWizardPrefilledName] = useState<string | null>(null);
@@ -295,7 +296,9 @@ export default function App() {
       }
       if (e.ctrlKey && e.key === 'g') {
         e.preventDefault();
-        setShowGraph((v) => !v);
+        e.stopImmediatePropagation();
+        setFullscreenGraph((v) => !v);
+        setShowGraph(true);
       }
       if (e.ctrlKey && e.key === 'w') {
         e.preventDefault();
@@ -348,23 +351,25 @@ export default function App() {
   }, [selectedPage]);
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${fullscreenGraph ? ' fullscreen-graph' : ''}`}>
       {/* ── Left: sidebar file explorer ─────────────────────────────────── */}
-      <Sidebar
-        pages={pages}
-        selectedId={selectedId}
-        searchQuery={searchQuery}
-        vaultPath={vaultPath}
-        onPageSelect={selectPage}
-        onSearchChange={setSearchQuery}
-        onOpenVault={() => void openVault()}
-        onDelete={handleDeletePage}
-      />
+      {!fullscreenGraph && (
+        <Sidebar
+          pages={pages}
+          selectedId={selectedId}
+          searchQuery={searchQuery}
+          vaultPath={vaultPath}
+          onPageSelect={selectPage}
+          onSearchChange={setSearchQuery}
+          onOpenVault={() => void openVault()}
+          onDelete={handleDeletePage}
+        />
+      )}
 
       {/* ── Center: graph (top) + editor (bottom) ───────────────────────── */}
       <section className="center-area">
         {showGraph && (
-          <div className="center-graph">
+          <div className={`center-graph${fullscreenGraph ? ' fullscreen' : ''}`}>
             <main className="graph-area">
               <Toolbar layoutMode={layoutMode} onLayoutChange={setLayoutMode} groupFilter={groupFilter} onGroupFilterChange={setGroupFilter} />
               {loading && <div className="loading-overlay">Loading vault…</div>}
@@ -380,45 +385,50 @@ export default function App() {
           </div>
         )}
 
-        <div className="center-editor">
-          <div className="editor-topbar">
-            <Breadcrumbs
-              history={navHistory}
-              pages={pages}
-              onNavigate={breadcrumbNavigate}
-              onBack={goBack}
-            />
-            <button
-              className={`toggle-graph-btn${showGraph ? ' active' : ''}`}
-              onClick={() => setShowGraph((v) => !v)}
-              title={showGraph ? 'Hide graph panel' : 'Show graph panel'}
-              type="button"
-            >
-              {showGraph ? '◩ Hide Graph' : '◧ Show Graph'}
-            </button>
-          </div>
-          {selectedPage ? (
-            <Editor
-              content={editorContent}
-              pageTitles={pageTitles}
-              personaTitles={personaTitles}
-              onChange={handleEditorChange}
-              onCycleStatus={handleCycleStatus}
-              onLinkClick={handleLinkClick}
-            />
-          ) : (
-            <div className="editor-placeholder">
-              Select a page to start editing
+        {!fullscreenGraph && (
+          <div className="center-editor">
+            <div className="editor-topbar">
+              <Breadcrumbs
+                history={navHistory}
+                pages={pages}
+                onNavigate={breadcrumbNavigate}
+                onBack={goBack}
+              />
+              <button
+                className={`toggle-graph-btn${showGraph ? ' active' : ''}`}
+                onClick={() => setShowGraph((v) => !v)}
+                title={showGraph ? 'Hide graph panel' : 'Show graph panel'}
+                type="button"
+              >
+                {showGraph ? '◩ Hide Graph' : '◧ Show Graph'}
+              </button>
             </div>
-          )}
-        </div>
+            {selectedPage ? (
+              <Editor
+                pageId={selectedPage.id}
+                content={editorContent}
+                pageTitles={pageTitles}
+                personaTitles={personaTitles}
+                onChange={handleEditorChange}
+                onCycleStatus={handleCycleStatus}
+                onLinkClick={handleLinkClick}
+              />
+            ) : (
+              <div className="editor-placeholder">
+                Select a page to start editing
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* ── Right: Task List + Inspector ─────────────────────────────────── */}
-      <aside className="right-panel">
-        <TaskList pages={pages} selectedId={selectedId} onSelect={selectPage} />
-        <Inspector page={selectedPage} pages={pages} onNavigate={navigateByTitle} onRename={handleRenamePage} onDelete={handleDeletePage} />
-      </aside>
+      {!fullscreenGraph && (
+        <aside className="right-panel">
+          <TaskList pages={pages} selectedId={selectedId} onSelect={selectPage} />
+          <Inspector page={selectedPage} pages={pages} onNavigate={navigateByTitle} onRename={handleRenamePage} onDelete={handleDeletePage} onCreatePage={handleLinkClick} />
+        </aside>
+      )}
 
       {/* ── Quick Open modal (TASK-036 Req 1) ────────────────────────── */}
       {quickOpenOpen && (

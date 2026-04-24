@@ -91,34 +91,93 @@ function getDeadlineMs(page: HermesPage): number | null {
 }
 
 /**
- * Map page ids (task/objective pages with a valid deadline) to an x
- * coordinate along the timeline axis, plus the page type for vertical layering.
- * x ∈ [-canvasW/2 + PAD, canvasW/2 - PAD], sorted oldest → newest.
+ * Map page ids to an x coordinate along the timeline axis.
+ * Includes "todayX" marker position.
+ * Implements "left of objective" constraint: items pointing to objectives (directly or not)
+ * must be on the left of the objective.
  */
 export function computeTimelinePositions(
   pages: HermesPage[],
   canvasW: number,
-): Map<string, { x: number; type: PageType }> {
+): {
+  positions: Map<string, { x: number; type: PageType }>;
+  todayX: number | null;
+} {
   const PAD = 90;
-  const withDeadline = pages
-    .filter((p) => (p.type === 'task' || p.type === 'objective') && getDeadlineMs(p) !== null);
+  const withDeadline = pages.filter(
+    (p) => (p.type === 'task' || p.type === 'objective') && getDeadlineMs(p) !== null,
+  );
 
-  if (withDeadline.length === 0) return new Map();
-
+  const today = new Date().getTime();
   const times = withDeadline.map((p) => getDeadlineMs(p)!);
-  const minT = Math.min(...times);
-  const maxT = Math.max(...times);
+  if (times.length === 0) {
+    return { positions: new Map(), todayX: 0 };
+  }
+
+  const minT = Math.min(...times, today);
+  const maxT = Math.max(...times, today);
   const range = maxT - minT || 1;
 
   const xMin = -canvasW / 2 + PAD;
   const xMax = canvasW / 2 - PAD;
 
-  const result = new Map<string, { x: number; type: PageType }>();
+  const positions = new Map<string, { x: number; type: PageType }>();
+
+  // Initial positions based on deadlines
   withDeadline.forEach((p) => {
     const t = (getDeadlineMs(p)! - minT) / range;
-    result.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type });
+    positions.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type });
   });
-  return result;
+
+  const todayT = (today - minT) / range;
+  const todayX = xMin + todayT * (xMax - xMin);
+
+  // Implement "left of objective" constraint
+  const objectives = pages.filter((p) => p.type === 'objective');
+  const pageByTitle = new Map(pages.map((p) => [p.title, p]));
+
+  // Iterative BFS to propagate "left of objective" constraints.
+  // Avoids stack overflow on circular link graphs via a visited set.
+  const minXConstraint = new Map<string, number>();
+
+  objectives.forEach((obj) => {
+    const pos = positions.get(obj.id);
+    if (!pos) return;
+
+    const queue: Array<{ id: string; maxX: number }> = [{ id: obj.id, maxX: pos.x }];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const { id: pageId, maxX } = queue.shift()!;
+      if (visited.has(pageId)) continue;
+      const current = minXConstraint.get(pageId) ?? Infinity;
+      if (maxX >= current) continue; // no improvement
+      minXConstraint.set(pageId, maxX);
+      visited.add(pageId);
+      // Enqueue pages that link to this page
+      pages.forEach((p) => {
+        if (!visited.has(p.id) && p.links.some((l) => pageByTitle.get(l)?.id === pageId)) {
+          queue.push({ id: p.id, maxX: maxX - 40 });
+        }
+      });
+    }
+  });
+
+  // Apply constraints to positions
+  minXConstraint.forEach((maxX, id) => {
+    const entry = positions.get(id);
+    const page = pages.find((p) => p.id === id);
+    if (entry) {
+      if (entry.x >= maxX) {
+        entry.x = maxX - 10;
+      }
+    } else if (page) {
+      // Node has no deadline but points to an objective: place it on timeline
+      positions.set(id, { x: maxX - 20, type: page.type });
+    }
+  });
+
+  return { positions, todayX };
 }
 
 export interface TimelineLane {
@@ -131,8 +190,14 @@ export interface TimelineLane {
 
 /**
  * Compute horizontal "swim lanes" for the timeline view.
- * Each lane spans the full timeline width and has a reduced height.
- * Objective lane sits closer to the axis, task lane sits below.
+ *
+ * FEEDBACK008 — Stratificazione verticale: Obj > Task > Others
+ *   - Objectives: sopra l'asse della timeline (prominenza visiva)
+ *   - Tasks: appena sotto l'asse
+ *   - Persona, Component, Note: sezione inferiore, in ordine
+ *
+ * Tutti i tipi sono inclusi per consentire il posizionamento corretto
+ * quando il filtro di categoria è attivo.
  */
 export function computeTimelineLanes(
   canvasW: number,
@@ -140,22 +205,29 @@ export function computeTimelineLanes(
   timelineY: number,
 ): TimelineLane[] {
   const PAD_X = 50;
-  const LANE_H = 50;    // half-height of each lane
-  const GAP = 16;       // gap between lanes
-  const TOP_OFFSET = 50; // distance from timeline axis to first lane top
+  const LANE_H = 50;  // half-height of each lane
+  const GAP = 16;     // gap between lanes
 
   const hw = canvasW / 2 - PAD_X;
 
-  // Objectives closer to the timeline axis, tasks below
-  const lanes: { type: PageType; order: number }[] = [
-    { type: 'objective', order: 0 },
-    { type: 'task', order: 1 },
+  // Stratificazione: offset dall'asse (negativo = sopra l'asse)
+  const laneLayout: { type: PageType; offsetFromAxis: number }[] = [
+    // Objectives: sopra l'asse per prominenza visiva
+    { type: 'objective', offsetFromAxis: -(LANE_H + GAP + 8) },
+    // Tasks: appena sotto l'asse
+    { type: 'task',      offsetFromAxis: LANE_H + GAP },
+    // Persona: sotto i task
+    { type: 'persona',   offsetFromAxis: LANE_H * 3 + GAP * 2 + 8 },
+    // Component: sotto persona
+    { type: 'component', offsetFromAxis: LANE_H * 5 + GAP * 3 + 8 },
+    // Note: in fondo
+    { type: 'note',      offsetFromAxis: LANE_H * 7 + GAP * 4 + 8 },
   ];
 
-  return lanes.map(({ type, order }) => ({
+  return laneLayout.map(({ type, offsetFromAxis }) => ({
     type,
     cx: 0,
-    cy: timelineY + TOP_OFFSET + LANE_H + order * (LANE_H * 2 + GAP),
+    cy: timelineY + offsetFromAxis,
     hw,
     hh: LANE_H,
   }));

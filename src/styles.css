@@ -499,6 +499,34 @@ body,
 
 .inspector-broken-link {
   color: #ff8a65;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.inspector-broken-link-name {
+  flex: 1;
+  font-size: 12px;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-create-btn {
+  flex-shrink: 0;
+  background: rgba(129, 199, 132, 0.15);
+  border: 1px solid rgba(129, 199, 132, 0.4);
+  color: #81c784;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.inspector-create-btn:hover {
+  background: rgba(129, 199, 132, 0.28);
+  border-color: rgba(129, 199, 132, 0.7);
 }
 
 .inspector-progress-bar {
@@ -534,6 +562,11 @@ body,
   border-bottom: 1px solid var(--sidebar-border);
   position: relative;
   overflow: hidden;
+}
+
+.center-graph.fullscreen {
+  height: 100vh;
+  border-bottom: none;
 }
 
 .center-editor {
