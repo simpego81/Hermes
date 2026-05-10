@@ -23,7 +23,8 @@ function parseScalar(value: string): string | string[] {
 export function parseMarkdownDocument(source: string): ParsedDocument {
   const frontmatterMatch = source.match(FRONTMATTER_PATTERN);
   const metadata: Record<string, string | string[]> = {};
-  const body = frontmatterMatch ? frontmatterMatch[2].trim() : source.trim();
+  // Strip leading blank lines that appear between the closing --- and content
+  const body = (frontmatterMatch ? frontmatterMatch[2] : source).replace(/^\n+/, '');
 
   if (frontmatterMatch) {
     for (const line of frontmatterMatch[1].split(/\r?\n/)) {

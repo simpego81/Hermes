@@ -10,6 +10,15 @@ export const PAGE_COLORS: Record<PageType, string> = {
   note: '#90a4ae',
 };
 
+export const DONE_TASK_COLOR = '#a89080'; // orange-gray
+
+export function getPageColor(type: PageType, status?: string): string {
+  if (type === 'task' && status === 'DONE') {
+    return DONE_TASK_COLOR;
+  }
+  return PAGE_COLORS[type];
+}
+
 export const PAGE_TYPE_LABELS: Record<PageType, string> = {
   persona: 'Persona',
   task: 'Task',

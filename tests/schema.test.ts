@@ -189,8 +189,10 @@ describe('validatePage — objective', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('passes an objective with no metadata (all optional)', () => {
-    expect(validatePage('objective', {})).toHaveLength(0);
+  it('requires deadline for an objective with no metadata', () => {
+    const errors = validatePage('objective', {});
+    expect(errors).toHaveLength(1);
+    expect(errors[0].field).toBe('deadline');
   });
 
   it('reports a date error for a malformed deadline', () => {

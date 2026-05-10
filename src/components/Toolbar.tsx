@@ -19,6 +19,9 @@ export function Toolbar({ layoutMode, onLayoutChange, groupFilter, onGroupFilter
 
   const showFilter = layoutMode === 'grouped' || layoutMode === 'timeline';
 
+  // FEEDBACK007: "group by category" only for Persona, Task, Component
+  const ALLOWED_GROUP_TYPES: PageType[] = ['persona', 'task', 'component'];
+
   return (
     <div className="toolbar" role="toolbar" aria-label="Graph layout controls">
       <button
@@ -47,7 +50,7 @@ export function Toolbar({ layoutMode, onLayoutChange, groupFilter, onGroupFilter
           title="Filter layout to a single category"
         >
           <option value="">All Categories</option>
-          {BOX_TYPE_ORDER.map((t) => (
+          {BOX_TYPE_ORDER.filter(t => ALLOWED_GROUP_TYPES.includes(t)).map((t) => (
             <option key={t} value={t}>{PAGE_TYPE_LABELS[t]}</option>
           ))}
         </select>

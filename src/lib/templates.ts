@@ -26,6 +26,7 @@ status: TO-DO
 priority: MEDIUM
 assignees:
 dependencies:
+needed_for:
 ---`,
     body: 'Describe the task objectives and acceptance criteria here.',
   },
@@ -34,6 +35,7 @@ dependencies:
     label: 'Objective',
     frontmatter: `---
 type: objective
+deadline: 2026-12-31
 tasks:
 dependencies:
 stakeholders:

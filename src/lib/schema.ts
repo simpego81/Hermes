@@ -30,11 +30,12 @@ export const PAGE_SCHEMAS: Record<PageType, SchemaDefinition> = {
     assignees: { required: false, label: 'Assignees', type: 'links' },
     blocked_by: { required: false, label: 'Blocked by', type: 'links' },
     dependencies: { required: false, label: 'Dependencies', type: 'links' },
+    needed_for: { required: false, label: 'Needed for', type: 'links' },
   },
   objective: {
     tasks: { required: false, label: 'Tasks', type: 'links' },
     dependencies: { required: false, label: 'Dependencies', type: 'links' },
-    deadline: { required: false, label: 'Deadline', type: 'date' },
+    deadline: { required: true, label: 'Deadline', type: 'date' },
     stakeholders: { required: false, label: 'Stakeholders', type: 'links' },
   },
   component: {},
