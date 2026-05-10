@@ -93,8 +93,13 @@ function getDeadlineMs(page: HermesPage): number | null {
 /**
  * Map page ids to an x coordinate along the timeline axis.
  * Includes "todayX" marker position.
- * Implements "left of objective" constraint: items pointing to objectives (directly or not)
- * must be on the left of the objective.
+ *
+ * FEEDBACK008 — Depth-based positioning:
+ *   - depth(objective) = 0
+ *   - depth(node) = minimum number of connections to reach an objective
+ *   - Deeper nodes are placed more to the left
+ *   - Objectives with deadlines are positioned by deadline
+ *   - Other nodes positioned by (depth, then deadline if available)
  */
 export function computeTimelinePositions(
   pages: HermesPage[],
@@ -104,80 +109,109 @@ export function computeTimelinePositions(
   todayX: number | null;
 } {
   const PAD = 90;
+  const DEPTH_SPACING = 120; // horizontal spacing per depth level
+
+  const objectives = pages.filter((p) => p.type === 'objective');
+  const pageByTitle = new Map(pages.map((p) => [p.title, p]));
+
+  // Build reverse link index: target -> sources that link to it
+  const reverseLinks = new Map<string, string[]>();
+  pages.forEach((p) => {
+    p.links.forEach((l) => {
+      const target = pageByTitle.get(l);
+      if (target) {
+        if (!reverseLinks.has(target.id)) reverseLinks.set(target.id, []);
+        reverseLinks.get(target.id)!.push(p.id);
+      }
+    });
+  });
+
+  // Compute depth via BFS from all objectives
+  // depth(objective) = 0, depth(node pointing to objective) = 1, etc.
+  const depth = new Map<string, number>();
+  const queue: Array<{ id: string; d: number }> = [];
+
+  // Seed: all objectives start at depth 0
+  objectives.forEach((obj) => {
+    depth.set(obj.id, 0);
+    queue.push({ id: obj.id, d: 0 });
+  });
+
+  while (queue.length > 0) {
+    const { id, d } = queue.shift()!;
+    // Find all pages that link TO this node (i.e., dependencies)
+    (reverseLinks.get(id) ?? []).forEach((sourceId) => {
+      if (!depth.has(sourceId)) {
+        depth.set(sourceId, d + 1);
+        queue.push({ id: sourceId, d: d + 1 });
+      }
+    });
+  }
+
+  // Compute deadline-based timeline for objectives
   const withDeadline = pages.filter(
     (p) => (p.type === 'task' || p.type === 'objective') && getDeadlineMs(p) !== null,
   );
 
   const today = new Date().getTime();
   const times = withDeadline.map((p) => getDeadlineMs(p)!);
-  if (times.length === 0) {
-    return { positions: new Map(), todayX: 0 };
-  }
 
-  const minT = Math.min(...times, today);
-  const maxT = Math.max(...times, today);
-  const range = maxT - minT || 1;
-
+  let todayX = 0;
   const xMin = -canvasW / 2 + PAD;
   const xMax = canvasW / 2 - PAD;
 
+  if (times.length > 0) {
+    const minT = Math.min(...times, today);
+    const maxT = Math.max(...times, today);
+    const range = maxT - minT || 1;
+    const todayT = (today - minT) / range;
+    todayX = xMin + todayT * (xMax - xMin);
+  }
+
+  // Position nodes based on depth and deadline
   const positions = new Map<string, { x: number; type: PageType }>();
 
-  // Initial positions based on deadlines
-  withDeadline.forEach((p) => {
-    const t = (getDeadlineMs(p)! - minT) / range;
-    positions.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type });
-  });
+  // Find max depth for positioning range
+  const maxDepth = Math.max(0, ...Array.from(depth.values()));
+  const depthRange = maxDepth > 0 ? maxDepth : 1;
 
-  const todayT = (today - minT) / range;
-  const todayX = xMin + todayT * (xMax - xMin);
+  pages.forEach((p) => {
+    const nodeDepth = depth.get(p.id);
+    const deadline = getDeadlineMs(p);
 
-  // Implement "left of objective" constraint
-  const objectives = pages.filter((p) => p.type === 'objective');
-  const pageByTitle = new Map(pages.map((p) => [p.title, p]));
-
-  // Iterative BFS to propagate "left of objective" constraints.
-  // Avoids stack overflow on circular link graphs via a visited set.
-  const minXConstraint = new Map<string, number>();
-
-  objectives.forEach((obj) => {
-    const pos = positions.get(obj.id);
-    if (!pos) return;
-
-    const queue: Array<{ id: string; maxX: number }> = [{ id: obj.id, maxX: pos.x }];
-    const visited = new Set<string>();
-
-    while (queue.length > 0) {
-      const { id: pageId, maxX } = queue.shift()!;
-      if (visited.has(pageId)) continue;
-      const current = minXConstraint.get(pageId) ?? Infinity;
-      if (maxX >= current) continue; // no improvement
-      minXConstraint.set(pageId, maxX);
-      visited.add(pageId);
-      // Enqueue pages that link to this page
-      pages.forEach((p) => {
-        if (!visited.has(p.id) && p.links.some((l) => pageByTitle.get(l)?.id === pageId)) {
-          queue.push({ id: p.id, maxX: maxX - 40 });
-        }
-      });
-    }
-  });
-
-  // Apply constraints to positions
-  minXConstraint.forEach((maxX, id) => {
-    const entry = positions.get(id);
-    const page = pages.find((p) => p.id === id);
-    if (entry) {
-      if (entry.x >= maxX) {
-        entry.x = maxX - 10;
+    if (p.type === 'objective' && deadline !== null) {
+      // Objectives with deadlines: position by deadline
+      if (times.length > 0) {
+        const minT = Math.min(...times, today);
+        const maxT = Math.max(...times, today);
+        const range = maxT - minT || 1;
+        const t = (deadline - minT) / range;
+        positions.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type });
       }
-    } else if (page) {
-      // Node has no deadline but points to an objective: place it on timeline
-      positions.set(id, { x: maxX - 20, type: page.type });
+    } else if (nodeDepth !== undefined) {
+      // Non-objective nodes or objectives without deadline: position by depth
+      // Higher depth = more left (reverse the scale)
+      const depthFactor = 1 - (nodeDepth / depthRange);
+
+      if (deadline !== null && times.length > 0) {
+        // Has deadline: blend depth positioning with deadline
+        const minT = Math.min(...times, today);
+        const maxT = Math.max(...times, today);
+        const range = maxT - minT || 1;
+        const t = (deadline - minT) / range;
+        const deadlineX = xMin + t * (xMax - xMin);
+        // Place to the left of deadline position based on depth
+        const x = deadlineX - nodeDepth * DEPTH_SPACING;
+        positions.set(p.id, { x: Math.max(xMin, x), type: p.type });
+      } else {
+        // No deadline: pure depth-based positioning
+        const x = xMax - nodeDepth * DEPTH_SPACING;
+        positions.set(p.id, { x: Math.max(xMin, x), type: p.type });
+      }
     }
   });
 
-  return { positions, todayX };
+  return { positions, todayX: times.length > 0 ? todayX : null };
 }
 
 export interface TimelineLane {
@@ -210,10 +244,11 @@ export function computeTimelineLanes(
 
   const hw = canvasW / 2 - PAD_X;
 
-  // Stratificazione: offset dall'asse (negativo = sopra l'asse)
+  // FEEDBACK008 Req 4-5: Stratificazione verticale con objectives più in alto
+  // Offset dall'asse timeline (negativo = sopra l'asse)
   const laneLayout: { type: PageType; offsetFromAxis: number }[] = [
-    // Objectives: sopra l'asse per prominenza visiva
-    { type: 'objective', offsetFromAxis: -(LANE_H + GAP + 8) },
+    // Objectives: sopra l'asse per prominenza visiva (moved higher per Req 5)
+    { type: 'objective', offsetFromAxis: -(LANE_H + GAP + 24) },
     // Tasks: appena sotto l'asse
     { type: 'task',      offsetFromAxis: LANE_H + GAP },
     // Persona: sotto i task

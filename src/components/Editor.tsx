@@ -41,6 +41,8 @@ function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
 // ── Props ───────────────────────────────────────────────────────────────────
 
 export interface EditorProps {
+  /** Page identifier — used to detect switching pages to position cursor. */
+  pageId: string;
   /** Full markdown source (frontmatter + body). */
   content: string;
   /** Titles of all pages in the vault — used for [[wiki-link]] autocomplete. */
@@ -97,7 +99,7 @@ const hermesEditorTheme = EditorView.theme(
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function Editor({ content, pageTitles, personaTitles, onChange, readOnly, onCycleStatus, onLinkClick }: EditorProps) {
+export function Editor({ pageId, content, pageTitles, personaTitles, onChange, readOnly, onCycleStatus, onLinkClick }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyComp = useRef(new Compartment());
@@ -117,7 +119,6 @@ export function Editor({ content, pageTitles, personaTitles, onChange, readOnly,
   const onLinkClickRef = useRef(onLinkClick);
   onLinkClickRef.current = onLinkClick;
 
-  // ── Wiki-link autocomplete function ─────────────────────────────────────
   const wikiComplete = useCallback(
     (ctx: CompletionContext): CompletionResult | null => {
       // Match trigger: [[ followed by optional text (no ] allowed).
@@ -125,10 +126,10 @@ export function Editor({ content, pageTitles, personaTitles, onChange, readOnly,
       if (!match) return null;
       const from = match.from + 2; // after the [[
 
-      // Check if ]] already exists right after cursor (e.g. from closeBrackets)
+      // Check if ]] or even a single ] already exists right after cursor
       const docLen = ctx.state.doc.length;
       const afterCursor = ctx.state.doc.sliceString(ctx.pos, Math.min(ctx.pos + 2, docLen));
-      const hasClosing = afterCursor === ']]';
+      const hasClosing = afterCursor.includes(']');
 
       const filter = ctx.state.doc.sliceString(from, ctx.pos).toLowerCase();
 
@@ -242,7 +243,7 @@ export function Editor({ content, pageTitles, personaTitles, onChange, readOnly,
         indentOnInput(),
         bracketMatching(),
         closeBrackets(),
-                autocompletion({ override: [frontmatterComplete, wikiComplete, mentionComplete] }),
+        autocompletion({ override: [frontmatterComplete, wikiComplete, mentionComplete] }),
         keymap.of([
           { key: 'Tab', run: acceptCompletion },
           {
@@ -298,33 +299,46 @@ export function Editor({ content, pageTitles, personaTitles, onChange, readOnly,
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
-    // Position cursor at the end of the document on initial open (TASK-042)
+    // Position cursor at the end of the document on initial mount (TASK-042)
     view.dispatch({ selection: { anchor: content.length } });
 
     return () => {
       view.destroy();
       viewRef.current = null;
     };
-    // Intentionally run only on mount. Content changes are handled below.
+    // Intentionally run only on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const lastPageId = useRef(pageId);
 
   // Sync external content changes (e.g. switching to another page).
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();
+
+    // If switching page, reset cursor to end
+    if (pageId !== lastPageId.current) {
+      lastPageId.current = pageId;
+      view.dispatch({
+        changes: { from: 0, to: current.length, insert: content },
+        selection: { anchor: content.length },
+        scrollIntoView: true,
+      });
+      return;
+    }
+
     if (current !== content) {
       // Preserve cursor position when content changes from props (e.g. metadata sync)
       const prevSelection = view.state.selection;
       const newLen = content.length;
       view.dispatch({
         changes: { from: 0, to: current.length, insert: content },
-        // Clamp selection to new document bounds
         selection: { anchor: Math.min(prevSelection.main.anchor, newLen), head: Math.min(prevSelection.main.head, newLen) },
       });
     }
-  }, [content]);
+  }, [content, pageId]);
 
   // Sync readOnly flag.
   useEffect(() => {

@@ -173,8 +173,8 @@ export default function App() {
       if (vaultPath && window.hermesDesktop?.vault?.writeFile) {
         window.hermesDesktop.vault
           .writeFile(vaultPath, selectedId, newContent)
-          .catch(() => {
-            /* silently ignore write failures in demo mode */
+          .catch((err) => {
+            console.error('Failed to save file:', selectedId, err);
           });
       }
     },

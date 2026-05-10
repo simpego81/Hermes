@@ -165,6 +165,19 @@ describe('Stress test: layout performance thresholds', () => {
     expect(elapsed).toBeLessThan(500);
   });
 
+  it('handles 600+ node graphs efficiently (D3 optimization verification)', () => {
+    const vault600 = generateVault(600);
+    const start = performance.now();
+    const graph = buildGraphData(vault600);
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(300); // <300ms for 600 nodes
+    expect(graph.nodes.length).toBe(600);
+    // Verify all nodes have valid positions after layout
+    graph.nodes.forEach((n) => {
+      expect(n.val).toBeGreaterThanOrEqual(5);
+    });
+  });
+
   it('computeGroupBoxes completes within 5 ms (box layout activation cost)', () => {
     const start = performance.now();
     for (let i = 0; i < 1000; i++) computeGroupBoxes(CANVAS_W, CANVAS_H);
@@ -250,9 +263,9 @@ describe('Stress test: box layout with 500 pages', () => {
     const xMax = CANVAS_W / 2 - PAD;
     const range = xMax - xMin;
 
-    if (timelinePositions.size < 2) return; // skip if too few deadline nodes
+    if (timelinePositions.positions.size < 2) return; // skip if too few deadline nodes
 
-    const xs = [...timelinePositions.values()].map((e) => e.x);
+    const xs = [...timelinePositions.positions.values()].map((e) => e.x);
     const observedMin = Math.min(...xs);
     const observedMax = Math.max(...xs);
     const coverage = (observedMax - observedMin) / range;

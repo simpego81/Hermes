@@ -3,6 +3,7 @@
 import {
   BOX_TYPE_ORDER,
   computeGroupBoxes,
+  computeTimelineLanes,
   computeTimelinePositions,
   getDeadlineLabel,
   gridPositionsInBox,
@@ -191,7 +192,7 @@ describe('computeTimelinePositions', () => {
       makePage('B', 'persona', { deadline: '2026-06-01' }),  // persona excluded
       makePage('C', 'component'),
     ];
-    expect(computeTimelinePositions(pages, CANVAS_W).size).toBe(0);
+    expect(computeTimelinePositions(pages, CANVAS_W).positions.size).toBe(0);
   });
 
   it('excludes persona, component, and note pages even with a deadline', () => {
@@ -200,27 +201,29 @@ describe('computeTimelinePositions', () => {
       makePage('C1', 'component', { deadline: '2026-01-01' }),
       makePage('N1', 'note', { deadline: '2026-01-01' }),
     ];
-    expect(computeTimelinePositions(pages, CANVAS_W).size).toBe(0);
+    expect(computeTimelinePositions(pages, CANVAS_W).positions.size).toBe(0);
   });
 
   it('includes task and objective pages with valid deadlines', () => {
-    const pages = [
-      makePage('T1', 'task', { deadline: '2026-06-01' }),
-      makePage('O1', 'objective', { deadline: '2026-09-01' }),
-    ];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    expect(result.has('T1')).toBe(true);
-    expect(result.has('O1')).toBe(true);
+    const obj = makePage('O1', 'objective', { deadline: '2026-09-01' });
+    const task = makePage('T1', 'task', { deadline: '2026-06-01' });
+    task.links = ['O1']; // Link task to objective for depth calculation
+    const pages = [task, obj];
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    expect(positions.has('T1')).toBe(true);
+    expect(positions.has('O1')).toBe(true);
   });
 
   it('oldest deadline maps to xMin, newest to xMax', () => {
-    const pages = [
-      makePage('early', 'task', { deadline: '2025-01-01' }),
-      makePage('late', 'task', { deadline: '2027-12-31' }),
-    ];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    expect(result.get('early')!.x).toBeCloseTo(xMin, 3);
-    expect(result.get('late')!.x).toBeCloseTo(xMax, 3);
+    const obj = makePage('obj', 'objective', { deadline: '2026-06-01' });
+    const early = makePage('early', 'task', { deadline: '2025-01-01' });
+    const late = makePage('late', 'task', { deadline: '2027-12-31' });
+    early.links = ['obj'];
+    late.links = ['obj'];
+    const pages = [obj, early, late];
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    // Tasks with deadlines positioned with depth offset, but still ordered by deadline
+    expect(positions.get('early')!.x).toBeLessThan(positions.get('late')!.x);
   });
 
   it('all x values fall within [xMin, xMax]', () => {
@@ -230,52 +233,250 @@ describe('computeTimelinePositions', () => {
       makePage('T3', 'objective', { deadline: '2026-12-01' }),
       makePage('T4', 'task', { deadline: '2026-03-20' }),
     ];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    result.forEach((entry) => {
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    positions.forEach((entry) => {
       expect(entry.x).toBeGreaterThanOrEqual(xMin - 0.001);
       expect(entry.x).toBeLessThanOrEqual(xMax + 0.001);
     });
   });
 
-  it('a single deadline maps to xMin (range = 1, t = 0)', () => {
-    const pages = [makePage('only', 'task', { deadline: '2026-06-01' })];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    expect(result.get('only')!.x).toBeCloseTo(xMin, 3);
+  it('a past deadline is placed at the left of the timeline', () => {
+    // Use a clearly past date so it becomes minT; today becomes the maxT anchor.
+    const obj = makePage('obj', 'objective', { deadline: '2026-06-01' });
+    const past = makePage('only', 'task', { deadline: '2025-01-01' });
+    past.links = ['obj'];
+    const pages = [obj, past];
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    // Past deadline should be to the left of the objective
+    expect(positions.get('only')!.x).toBeLessThan(positions.get('obj')!.x);
   });
 
   it('two identical deadlines are placed at the same x coordinate', () => {
-    const pages = [
-      makePage('T1', 'task', { deadline: '2026-06-01' }),
-      makePage('T2', 'objective', { deadline: '2026-06-01' }),
-    ];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    // both have t=0 → both at xMin
-    expect(result.get('T1')!.x).toBeCloseTo(xMin, 3);
-    expect(result.get('T2')!.x).toBeCloseTo(xMin, 3);
+    const obj = makePage('obj', 'objective', { deadline: '2026-12-01' });
+    const t1 = makePage('T1', 'task', { deadline: '2026-06-01' });
+    const t2 = makePage('T2', 'task', { deadline: '2026-06-01' });
+    t1.links = ['obj'];
+    t2.links = ['obj'];
+    const pages = [obj, t1, t2];
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    // Both are tasks with the same deadline and depth → same x position.
+    expect(positions.get('T1')!.x).toBeCloseTo(positions.get('T2')!.x, 3);
   });
 
-  it('excludes task pages with an invalid deadline format', () => {
-    const pages = [
-      makePage('bad', 'task', { deadline: '01/06/2026' }),
-      makePage('good', 'task', { deadline: '2026-06-01' }),
-    ];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    expect(result.has('bad')).toBe(false);
-    expect(result.has('good')).toBe(true);
+  it('positions task with invalid deadline using depth only', () => {
+    const obj = makePage('obj', 'objective', { deadline: '2026-12-01' });
+    const bad = makePage('bad', 'task', { deadline: '01/06/2026' });
+    const good = makePage('good', 'task', { deadline: '2026-06-01' });
+    bad.links = ['obj'];
+    good.links = ['obj'];
+    const pages = [obj, bad, good];
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    // Task with invalid deadline but valid depth is still positioned (using depth only)
+    expect(positions.has('bad')).toBe(true);
+    expect(positions.has('good')).toBe(true);
+    // Task with valid deadline uses deadline+depth, invalid uses only depth
+    expect(positions.get('good')!.x).toBeLessThan(positions.get('obj')!.x);
   });
 
   it('x positions are monotonically ordered by deadline date', () => {
-    const pages = [
-      makePage('T1', 'task', { deadline: '2026-03-01' }),
-      makePage('T2', 'task', { deadline: '2026-06-01' }),
-      makePage('T3', 'task', { deadline: '2026-12-01' }),
-    ];
-    const result = computeTimelinePositions(pages, CANVAS_W);
-    const x1 = result.get('T1')!.x;
-    const x2 = result.get('T2')!.x;
-    const x3 = result.get('T3')!.x;
+    const obj = makePage('obj', 'objective', { deadline: '2027-01-01' });
+    const t1 = makePage('T1', 'task', { deadline: '2026-03-01' });
+    const t2 = makePage('T2', 'task', { deadline: '2026-06-01' });
+    const t3 = makePage('T3', 'task', { deadline: '2026-12-01' });
+    t1.links = ['obj'];
+    t2.links = ['obj'];
+    t3.links = ['obj'];
+    const pages = [obj, t1, t2, t3];
+    const { positions } = computeTimelinePositions(pages, CANVAS_W);
+    const x1 = positions.get('T1')!.x;
+    const x2 = positions.get('T2')!.x;
+    const x3 = positions.get('T3')!.x;
     expect(x1).toBeLessThan(x2);
     expect(x2).toBeLessThan(x3);
+  });
+
+  // ── Depth-based positioning (FEEDBACK008) ──────────────────────────────────
+  describe('depth calculation', () => {
+    it('assigns depth 0 to all objectives', () => {
+      const pages = [
+        makePage('Obj1', 'objective', { deadline: '2026-06-01' }),
+        makePage('Obj2', 'objective', { deadline: '2026-12-01' }),
+        makePage('Task1', 'task', { deadline: '2026-08-01' }),
+      ];
+      // Link task to objectives to trigger depth calculation
+      pages[2].links = ['Obj1'];
+
+      const { positions } = computeTimelinePositions(pages, CANVAS_W);
+
+      // Objectives with deadlines positioned by deadline only (not depth-offset)
+      expect(positions.has('Obj1')).toBe(true);
+      expect(positions.has('Obj2')).toBe(true);
+      // Verify Obj1 < Obj2 (ordered by deadline)
+      expect(positions.get('Obj1')!.x).toBeLessThan(positions.get('Obj2')!.x);
+    });
+
+    it('assigns depth 1 to nodes directly linking to objectives', () => {
+      const obj = makePage('MainObjective', 'objective', { deadline: '2026-12-01' });
+      const task1 = makePage('Task1', 'task', { deadline: '2026-06-01' });
+      const task2 = makePage('Task2', 'task', { deadline: '2026-06-15' });
+
+      // Tasks link TO the objective
+      task1.links = ['MainObjective'];
+      task2.links = ['MainObjective'];
+
+      const pages = [obj, task1, task2];
+      const { positions } = computeTimelinePositions(pages, CANVAS_W);
+
+      // Tasks should be positioned to the LEFT of their deadline (depth = 1)
+      // Depth spacing is 120px per level
+      const objX = positions.get('MainObjective')!.x;
+      const task1X = positions.get('Task1')!.x;
+      const task2X = positions.get('Task2')!.x;
+
+      // Tasks with depth 1 should be offset left from their deadline position
+      // (Can't calculate exact value without knowing deadline mapping, but verify they exist)
+      expect(positions.has('Task1')).toBe(true);
+      expect(positions.has('Task2')).toBe(true);
+
+      // Objectives should be at rightmost position for their deadline
+      expect(objX).toBeGreaterThan(task1X);
+      expect(objX).toBeGreaterThan(task2X);
+    });
+
+    it('handles multiple paths by selecting minimum depth', () => {
+      const obj = makePage('Objective', 'objective', { deadline: '2026-12-01' });
+      // Use same deadline for all tasks to isolate depth effect
+      const taskA = makePage('TaskA', 'task', { deadline: '2026-08-01' });
+      const taskB = makePage('TaskB', 'task', { deadline: '2026-08-01' });
+      const taskC = makePage('TaskC', 'task', { deadline: '2026-08-01' });
+
+      // TaskA -> Objective (depth 1)
+      taskA.links = ['Objective'];
+      // TaskB -> TaskA -> Objective (depth 2)
+      taskB.links = ['TaskA'];
+      // TaskC -> both TaskA AND Objective (min depth = 1)
+      taskC.links = ['TaskA', 'Objective'];
+
+      const pages = [obj, taskA, taskB, taskC];
+      const { positions } = computeTimelinePositions(pages, CANVAS_W);
+
+      // TaskC has two paths: direct to Obj (depth 1) and via TaskA (depth 2)
+      // BFS should assign minimum depth = 1
+      const taskAX = positions.get('TaskA')!.x;
+      const taskCX = positions.get('TaskC')!.x;
+      const taskBX = positions.get('TaskB')!.x;
+
+      // With same deadline, position is purely depth-based: x = deadlineX - depth * 120px
+      // TaskA and TaskC both have depth 1 → same x
+      expect(taskAX).toBeCloseTo(taskCX, 1);
+      // TaskB has depth 2 → 120px further left
+      expect(taskBX).toBeLessThan(taskAX - 100); // At least 100px left
+      expect(taskBX).toBeLessThan(taskCX - 100);
+    });
+
+    it('handles disconnected nodes (no path to any objective)', () => {
+      const obj = makePage('Objective', 'objective', { deadline: '2026-12-01' });
+      const taskA = makePage('Connected', 'task', { deadline: '2026-06-01' });
+      const taskB = makePage('Isolated', 'task', { deadline: '2026-08-01' });
+
+      taskA.links = ['Objective'];
+      // TaskB has no links, disconnected from objective
+
+      const pages = [obj, taskA, taskB];
+      const { positions } = computeTimelinePositions(pages, CANVAS_W);
+
+      // Connected task should be positioned
+      expect(positions.has('Connected')).toBe(true);
+      // Disconnected task has no depth, won't be positioned (undefined depth)
+      expect(positions.has('Isolated')).toBe(false);
+    });
+
+    it('positions deeper nodes more to the left', () => {
+      const obj = makePage('Objective', 'objective', { deadline: '2026-12-01' });
+      const task1 = makePage('Task1', 'task', { deadline: '2026-08-01' });
+      const task2 = makePage('Task2', 'task', { deadline: '2026-08-01' }); // Same deadline
+      const task3 = makePage('Task3', 'task', { deadline: '2026-08-01' });
+
+      // Create depth chain: Task3 -> Task2 -> Task1 -> Objective
+      task1.links = ['Objective']; // depth 1
+      task2.links = ['Task1'];     // depth 2
+      task3.links = ['Task2'];     // depth 3
+
+      const pages = [obj, task1, task2, task3];
+      const { positions } = computeTimelinePositions(pages, CANVAS_W);
+
+      const x1 = positions.get('Task1')!.x;
+      const x2 = positions.get('Task2')!.x;
+      const x3 = positions.get('Task3')!.x;
+
+      // All tasks have same deadline, so ordering is purely by depth
+      // Deeper = more left
+      expect(x3).toBeLessThan(x2);
+      expect(x2).toBeLessThan(x1);
+    });
+
+    it('correctly blends depth with deadline positioning', () => {
+      const obj = makePage('Objective', 'objective', { deadline: '2026-12-01' });
+      const earlyTask = makePage('EarlyTask', 'task', { deadline: '2026-03-01' });
+      const lateTask = makePage('LateTask', 'task', { deadline: '2026-11-01' });
+
+      earlyTask.links = ['Objective']; // depth 1
+      lateTask.links = ['Objective'];  // depth 1
+
+      const pages = [obj, earlyTask, lateTask];
+      const { positions } = computeTimelinePositions(pages, CANVAS_W);
+
+      const earlyX = positions.get('EarlyTask')!.x;
+      const lateX = positions.get('LateTask')!.x;
+      const objX = positions.get('Objective')!.x;
+
+      // Both tasks have depth 1, but different deadlines
+      // Earlier deadline should still be more left
+      expect(earlyX).toBeLessThan(lateX);
+
+      // Both tasks should be to the left of the objective (depth offset)
+      expect(earlyX).toBeLessThan(objX);
+      expect(lateX).toBeLessThan(objX);
+
+      // Depth spacing = 120px, so tasks should be ~120px left of their deadline position
+      // (Exact value depends on deadline range mapping, but verify general behavior)
+    });
+  });
+});
+
+// ── computeTimelineLanes ──────────────────────────────────────────────────────
+
+describe('computeTimelineLanes', () => {
+  it('returns 5 lanes (one per page type)', () => {
+    const lanes = computeTimelineLanes(CANVAS_W, CANVAS_H, -200);
+    expect(lanes).toHaveLength(5);
+    expect(lanes.map((l) => l.type)).toEqual(['objective', 'task', 'persona', 'component', 'note']);
+  });
+
+  it('positions objective lane above the timeline axis', () => {
+    const TIMELINE_Y = -200;
+    const lanes = computeTimelineLanes(CANVAS_W, CANVAS_H, TIMELINE_Y);
+    const objLane = lanes.find((l) => l.type === 'objective')!;
+    // Objective lane should be above (negative offset from) timeline axis
+    expect(objLane.cy).toBeLessThan(TIMELINE_Y);
+  });
+
+  it('positions task lane below the timeline axis', () => {
+    const TIMELINE_Y = -200;
+    const lanes = computeTimelineLanes(CANVAS_W, CANVAS_H, TIMELINE_Y);
+    const taskLane = lanes.find((l) => l.type === 'task')!;
+    // Task lane should be below (positive offset from) timeline axis
+    expect(taskLane.cy).toBeGreaterThan(TIMELINE_Y);
+  });
+
+  it('stratifies lanes vertically: Obj > Task > Persona > Component > Note', () => {
+    const lanes = computeTimelineLanes(CANVAS_W, CANVAS_H, 0);
+    const yPositions = lanes.map((l) => l.cy);
+    // Objectives highest (most negative cy), Note lowest (most positive cy)
+    expect(yPositions[0]).toBeLessThan(yPositions[1]); // Obj < Task
+    expect(yPositions[1]).toBeLessThan(yPositions[2]); // Task < Persona
+    expect(yPositions[2]).toBeLessThan(yPositions[3]); // Persona < Component
+    expect(yPositions[3]).toBeLessThan(yPositions[4]); // Component < Note
   });
 });
 
