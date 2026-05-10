@@ -51,6 +51,7 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef<Map<string, { fx: number; fy: number }>>(new Map());
   const labelOffsetRef = useRef<Map<string, number>>(new Map());
+  const flagOffsetRef = useRef<Map<string, number>>(new Map()); // TASK-047: Objective flag stacking offsets
   // OPTIMIZATION: Track camera position for viewport culling
   const cameraRef = useRef({ x: 0, y: 0, k: 1 });
   // OPTIMIZATION: FPS monitoring for performance observability
@@ -147,7 +148,7 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
                     const dx = b.x - a.x;
                     const dy = b.y - a.y;
                     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const minDist = rA + rB;
+                    const minDist = rA + rB + 5; // TASK-048: +5px safety margin to prevent touch-overlap
 
                     if (dist < minDist) {
                       // OPTIMIZATION: Increased collision strength from 0.5 to 0.75 to reduce
@@ -367,11 +368,14 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
             const lane = laneMap.get(n.type);
             if (lane) {
               // Attract to lane center and clamp within lane bounds
-              const STRENGTH = 0.12;
+              // TASK-048: Increased strength from 0.12 to 0.35 for stronger lane containment
+              const STRENGTH = 0.35;
               const MARGIN = 14;
               n.vx = (n.vx ?? 0) + (lane.cx - (n.x ?? 0)) * STRENGTH * alpha * 0.3;
               n.vy = (n.vy ?? 0) + (lane.cy - (n.y ?? 0)) * STRENGTH * alpha;
-              n.y = Math.max(lane.cy - lane.hh + MARGIN, Math.min(lane.cy + lane.hh - MARGIN, n.y ?? 0));
+              // Hard clamp Y to prevent vertical escape from lane
+              const LANE_CLAMP = lane.hh * 0.8;
+              n.y = Math.max(lane.cy - LANE_CLAMP, Math.min(lane.cy + LANE_CLAMP, n.y ?? 0));
             } else if (n.type === 'persona' && showPersonaBox) {
               // Contain personas in their box only when filter is active
               const STRENGTH = 0.12;
@@ -445,6 +449,43 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
       const color = isDone ? '#A09080' : (PAGE_COLORS[node.type] ?? PAGE_COLORS.note);
       const isSelected = node.id === selectedId;
 
+      // TASK-047: Objective "flag" rendering in timeline mode
+      if (layoutMode === 'timeline' && node.type === 'objective') {
+        const TIMELINE_Y = -(size.height * 0.28);
+        const flagW = 70 / globalScale;
+        const flagH = 18 / globalScale;
+        const vOffset = flagOffsetRef.current.get(node.id) ?? 0;
+        const flagY = node.y! - vOffset;
+
+        // Vertical marker from flag to timeline axis
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2 / globalScale;
+        ctx.beginPath();
+        ctx.moveTo(node.x!, flagY);
+        ctx.lineTo(node.x!, TIMELINE_Y + 20 / globalScale);
+        ctx.stroke();
+
+        // Flag rectangle
+        ctx.fillStyle = color;
+        ctx.fillRect(node.x! - flagW / 2, flagY - flagH / 2, flagW, flagH);
+
+        // Objective name in flag (white text)
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${11 / globalScale}px 'Segoe UI', system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.label, node.x!, flagY);
+
+        // Selection glow for flag
+        if (isSelected) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5 / globalScale;
+          ctx.strokeRect(node.x! - flagW / 2, flagY - flagH / 2, flagW, flagH);
+        }
+
+        return; // Skip normal circle rendering
+      }
+
       // Glow ring for selected node
       if (isSelected) {
         ctx.beginPath();
@@ -476,8 +517,21 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
       ctx.lineWidth = isSelected ? 2 / globalScale : 0.8 / globalScale;
       ctx.stroke();
 
-      // Label — only visible past the zoom threshold
-      if (globalScale >= LABEL_ZOOM_THRESHOLD) {
+      // TASK-047: Vertical persona labels in timeline mode (always visible)
+      if (layoutMode === 'timeline' && node.type === 'persona') {
+        ctx.save();
+        ctx.translate(node.x!, node.y! + radius + 12 / globalScale);
+        ctx.rotate(-Math.PI / 2); // 90 degrees counter-clockwise
+        ctx.fillStyle = '#e8e8f0';
+        const fontSize = BASE_FONT_PX / globalScale;
+        ctx.font = `${fontSize}px 'Segoe UI', system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(node.label, 0, 0);
+        ctx.restore();
+      }
+      // Label — only visible past the zoom threshold (normal modes)
+      else if (globalScale >= LABEL_ZOOM_THRESHOLD) {
         const fontSize = BASE_FONT_PX / globalScale;
         ctx.font = `${fontSize}px 'Segoe UI', system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -487,7 +541,7 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
         ctx.fillText(node.label, node.x!, node.y! + radius + 2 / globalScale + labelYOffset);
       }
     },
-    [selectedId, pages, size.width, size.height],
+    [selectedId, pages, size.width, size.height, layoutMode],
   );
 
   const buildTooltip = useCallback(
@@ -655,6 +709,26 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
 
           labelOffsets.set(curr.id, vOffset);
         }
+
+        // TASK-047: Compute objective flag stacking offsets
+        const objectiveNodes = data.nodes
+          .filter((n) => n.type === 'objective')
+          .map((n) => ({ id: n.id, x: n.x ?? 0 }))
+          .sort((a, b) => a.x - b.x);
+
+        const flagOffsets = new Map<string, number>();
+        const FLAG_MIN_GAP = 72 / globalScale; // Horizontal spacing threshold for stacking
+
+        for (let i = 0; i < objectiveNodes.length; i++) {
+          let vOffset = 0;
+          for (let j = i - 1; j >= 0; j--) {
+            const gap = objectiveNodes[i].x - objectiveNodes[j].x;
+            if (gap > FLAG_MIN_GAP) break; // Far enough, no collision
+            vOffset += 22 / globalScale; // Stack 22px higher
+          }
+          flagOffsets.set(objectiveNodes[i].id, vOffset);
+        }
+        flagOffsetRef.current = flagOffsets;
 
         // Draw ticks and labels with offsets
         ctx.textAlign = 'center';

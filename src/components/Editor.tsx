@@ -57,6 +57,8 @@ export interface EditorProps {
   onCycleStatus?: () => void;
   /** Called when user Ctrl+Clicks a [[wiki-link]]. */
   onLinkClick?: (title: string) => void;
+  /** Called when user types non-existent @mention or [[wiki-link]] and presses space/enter (TASK-045). */
+  onQuickCreate?: (text: string, triggerType: 'mention' | 'wiki') => void;
 }
 
 // ── Dark theme ──────────────────────────────────────────────────────────────
@@ -99,7 +101,7 @@ const hermesEditorTheme = EditorView.theme(
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function Editor({ pageId, content, pageTitles, personaTitles, onChange, readOnly, onCycleStatus, onLinkClick }: EditorProps) {
+export function Editor({ pageId, content, pageTitles, personaTitles, onChange, readOnly, onCycleStatus, onLinkClick, onQuickCreate }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyComp = useRef(new Compartment());
@@ -118,6 +120,12 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
 
   const onLinkClickRef = useRef(onLinkClick);
   onLinkClickRef.current = onLinkClick;
+
+  const onQuickCreateRef = useRef(onQuickCreate);
+  onQuickCreateRef.current = onQuickCreate;
+
+  // TASK-045: Track when autocomplete has no matches for quick-create trigger
+  const typedTextRef = useRef<{ type: 'wiki' | 'mention'; text: string } | null>(null);
 
   const wikiComplete = useCallback(
     (ctx: CompletionContext): CompletionResult | null => {
@@ -141,6 +149,13 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
           type: 'text' as const,
         }));
 
+      // TASK-045: Track no-match scenario for quick-create
+      if (options.length === 0 && filter.length > 0) {
+        typedTextRef.current = { type: 'wiki', text: filter };
+      } else {
+        typedTextRef.current = null;
+      }
+
       return { from, options, filter: false };
     },
     [],
@@ -163,6 +178,13 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
           detail: 'persona',
           type: 'text' as const,
         }));
+
+      // TASK-045: Track no-match scenario for quick-create
+      if (options.length === 0 && filter.length > 0) {
+        typedTextRef.current = { type: 'mention', text: filter };
+      } else {
+        typedTextRef.current = null;
+      }
 
       return { from: match.from, options, filter: false };
     },
@@ -289,6 +311,18 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
               event.preventDefault();
               onLinkClickRef.current(title);
               return true;
+            }
+            return false;
+          },
+          // TASK-045: Quick-create trigger when space/Enter pressed after no-match autocomplete
+          keydown(event: KeyboardEvent) {
+            if (typedTextRef.current && (event.key === ' ' || event.key === 'Enter')) {
+              const { type, text } = typedTextRef.current;
+              if (onQuickCreateRef.current) {
+                onQuickCreateRef.current(text, type);
+                typedTextRef.current = null;
+                // Don't prevent default - let the space/Enter be typed
+              }
             }
             return false;
           },

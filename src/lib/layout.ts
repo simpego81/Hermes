@@ -239,7 +239,7 @@ export function computeTimelineLanes(
   timelineY: number,
 ): TimelineLane[] {
   const PAD_X = 50;
-  const LANE_H = 50;  // half-height of each lane
+  const LANE_H = 70;  // half-height of each lane (TASK-048: increased from 50 for more vertical space)
   const GAP = 16;     // gap between lanes
 
   const hw = canvasW / 2 - PAD_X;

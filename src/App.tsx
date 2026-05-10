@@ -275,6 +275,25 @@ export default function App() {
     [pages, selectPage],
   );
 
+  // ── Quick-create from editor (TASK-045) ─────────────────────────────────
+  const handleQuickCreate = useCallback(
+    (text: string, triggerType: 'mention' | 'wiki') => {
+      // Check if page already exists
+      if (pages.some((p) => p.title === text)) return;
+
+      setWizardPrefilledName(text);
+
+      if (triggerType === 'mention') {
+        // @mention → directly create Persona without asking type
+        void handleWizardConfirm(text, 'persona');
+      } else {
+        // [[wiki]] → open wizard to select type
+        setWizardOpen(true);
+      }
+    },
+    [pages, handleWizardConfirm],
+  );
+
   // Global keyboard shortcuts (TASK-013 + TASK-014 + TASK-036 + TASK-042).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -412,6 +431,7 @@ export default function App() {
                 onChange={handleEditorChange}
                 onCycleStatus={handleCycleStatus}
                 onLinkClick={handleLinkClick}
+                onQuickCreate={handleQuickCreate}
               />
             ) : (
               <div className="editor-placeholder">
