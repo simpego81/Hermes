@@ -1,10 +1,35 @@
 /* Hermes Electron main process bootstrap. */
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
-import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+
+// ── Workspace persistence (TASK-054) ──────────────────────────────────────────
+
+interface HermesConfig {
+  lastWorkspacePath?: string;
+}
+
+let configPath: string;
+let config: HermesConfig = {};
+
+async function loadConfig(): Promise<void> {
+  configPath = path.join(app.getPath('userData'), 'hermes-config.json');
+  try {
+    const data = await readFile(configPath, 'utf-8');
+    config = JSON.parse(data);
+  } catch {
+    // Config doesn't exist yet or is invalid - use empty config
+    config = {};
+  }
+}
+
+async function saveConfig(): Promise<void> {
+  await mkdir(path.dirname(configPath), { recursive: true });
+  await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+}
 
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
@@ -171,7 +196,8 @@ ipcMain.handle(
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await loadConfig();
   const window = createMainWindow();
   createMenu(window);
 
@@ -196,6 +222,27 @@ ipcMain.handle('vault:save-dialog', async (_event, defaultTitle: string) => {
     filters: [{ name: 'Markdown', extensions: ['md'] }],
   });
   return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('vault:get-last-path', async () => {
+  // Verify path still exists before returning
+  if (config.lastWorkspacePath) {
+    try {
+      await access(config.lastWorkspacePath);
+      return config.lastWorkspacePath;
+    } catch {
+      // Path no longer exists, clear it
+      config.lastWorkspacePath = undefined;
+      await saveConfig();
+      return null;
+    }
+  }
+  return null;
+});
+
+ipcMain.handle('vault:set-last-path', async (_event, dirPath: string | null) => {
+  config.lastWorkspacePath = dirPath ?? undefined;
+  await saveConfig();
 });
 
 ipcMain.handle(

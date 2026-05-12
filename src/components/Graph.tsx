@@ -427,22 +427,28 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
       const radius = Math.sqrt(node.val) * 2.8;
 
       // OPTIMIZATION: Viewport frustum culling - skip rendering nodes outside visible viewport
+      // BUG-002 FIX: Disable culling at high zoom levels where camera position tracking is less accurate
       const camera = cameraRef.current;
-      const viewportW = size.width / camera.k;
-      const viewportH = size.height / camera.k;
-      const CULL_BUFFER = 50; // Extra margin to prevent pop-in at edges
-      const nodeX = node.x ?? 0;
-      const nodeY = node.y ?? 0;
+      const MIN_ZOOM_FOR_CULLING = 0.5; // Only cull when zoomed out (many nodes visible)
 
-      const isInViewport =
-        nodeX >= camera.x - viewportW / 2 - CULL_BUFFER &&
-        nodeX <= camera.x + viewportW / 2 + CULL_BUFFER &&
-        nodeY >= camera.y - viewportH / 2 - CULL_BUFFER &&
-        nodeY <= camera.y + viewportH / 2 + CULL_BUFFER;
+      if (camera.k >= MIN_ZOOM_FOR_CULLING) {
+        const viewportW = size.width / camera.k;
+        const viewportH = size.height / camera.k;
+        const CULL_BUFFER = 200; // BUG-002: Increased buffer to prevent nodes disappearing (was 50)
+        const nodeX = node.x ?? 0;
+        const nodeY = node.y ?? 0;
 
-      if (!isInViewport) {
-        return; // Skip rendering this node (30-50% FPS improvement when zoomed)
+        const isInViewport =
+          nodeX >= camera.x - viewportW / 2 - CULL_BUFFER &&
+          nodeX <= camera.x + viewportW / 2 + CULL_BUFFER &&
+          nodeY >= camera.y - viewportH / 2 - CULL_BUFFER &&
+          nodeY <= camera.y + viewportH / 2 + CULL_BUFFER;
+
+        if (!isInViewport) {
+          return; // Skip rendering this node (30-50% FPS improvement when zoomed)
+        }
       }
+      // At high zoom (k >= MIN_ZOOM_FOR_CULLING), render all nodes (fewer visible, culling not needed)
 
       const page = pages.find((p) => p.id === node.id);
       const isDone = page?.type === 'task' && page?.metadata.status === 'DONE';

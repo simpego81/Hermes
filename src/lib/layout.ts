@@ -3,12 +3,12 @@ import type { HermesPage, PageType } from './types';
 
 export type LayoutMode = 'free' | 'grouped' | 'timeline';
 
-/** Order in which category boxes are placed (row-major, 3 cols). */
+/** Order in which category boxes are placed (row-major, 3 cols) and timeline lanes (top to bottom). */
 export const BOX_TYPE_ORDER: PageType[] = [
-  'task',
   'objective',
-  'persona',
   'component',
+  'task',
+  'persona',
   'note',
 ];
 
@@ -225,13 +225,10 @@ export interface TimelineLane {
 /**
  * Compute horizontal "swim lanes" for the timeline view.
  *
- * FEEDBACK008 — Stratificazione verticale: Obj > Task > Others
- *   - Objectives: sopra l'asse della timeline (prominenza visiva)
- *   - Tasks: appena sotto l'asse
- *   - Persona, Component, Note: sezione inferiore, in ordine
- *
- * Tutti i tipi sono inclusi per consentire il posizionamento corretto
- * quando il filtro di categoria è attivo.
+ * FEEDBACK011 — Swimlane per category:
+ *   - Each category gets its own swimlane (horizontal band)
+ *   - Visual order top to bottom: objectives, components, tasks, persona, notes
+ *   - Objectives remain above timeline axis for prominence
  */
 export function computeTimelineLanes(
   canvasW: number,
@@ -239,23 +236,23 @@ export function computeTimelineLanes(
   timelineY: number,
 ): TimelineLane[] {
   const PAD_X = 50;
-  const LANE_H = 70;  // half-height of each lane (TASK-048: increased from 50 for more vertical space)
+  const LANE_H = 70;  // half-height of each lane
   const GAP = 16;     // gap between lanes
 
   const hw = canvasW / 2 - PAD_X;
 
-  // FEEDBACK008 Req 4-5: Stratificazione verticale con objectives più in alto
-  // Offset dall'asse timeline (negativo = sopra l'asse)
+  // FEEDBACK011: New vertical order - objectives, components, tasks, persona, notes
+  // Offset from timeline axis (negative = above axis)
   const laneLayout: { type: PageType; offsetFromAxis: number }[] = [
-    // Objectives: sopra l'asse per prominenza visiva (moved higher per Req 5)
+    // Objectives: above axis (top)
     { type: 'objective', offsetFromAxis: -(LANE_H + GAP + 24) },
-    // Tasks: appena sotto l'asse
-    { type: 'task',      offsetFromAxis: LANE_H + GAP },
-    // Persona: sotto i task
-    { type: 'persona',   offsetFromAxis: LANE_H * 3 + GAP * 2 + 8 },
-    // Component: sotto persona
-    { type: 'component', offsetFromAxis: LANE_H * 5 + GAP * 3 + 8 },
-    // Note: in fondo
+    // Components: below axis, first lane
+    { type: 'component', offsetFromAxis: LANE_H + GAP },
+    // Tasks: below components
+    { type: 'task',      offsetFromAxis: LANE_H * 3 + GAP * 2 + 8 },
+    // Persona: below tasks
+    { type: 'persona',   offsetFromAxis: LANE_H * 5 + GAP * 3 + 8 },
+    // Notes: bottom
     { type: 'note',      offsetFromAxis: LANE_H * 7 + GAP * 4 + 8 },
   ];
 

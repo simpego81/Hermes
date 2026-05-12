@@ -16,6 +16,8 @@ interface HermesDesktopApi {
     writeFile(dirPath: string, relPath: string, content: string): Promise<void>;
     deleteFile(dirPath: string, relPath: string): Promise<void>;
     renameFile(dirPath: string, oldRelPath: string, newRelPath: string): Promise<void>;
+    getLastPath(): Promise<string | null>;
+    setLastPath(dirPath: string | null): Promise<void>;
   };
   onMenuNewPage(callback: () => void): void;
   onMenuOpenVault(callback: () => void): void;

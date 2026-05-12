@@ -59,6 +59,10 @@ export interface EditorProps {
   onLinkClick?: (title: string) => void;
   /** Called when user types non-existent @mention or [[wiki-link]] and presses space/enter (TASK-045). */
   onQuickCreate?: (text: string, triggerType: 'mention' | 'wiki') => void;
+  /** TASK-050: Optional cursor position override for new pages. */
+  cursorPosition?: number | null;
+  /** TASK-050: Called after cursorPosition is used to reset it. */
+  onCursorPositionUsed?: () => void;
 }
 
 // ── Dark theme ──────────────────────────────────────────────────────────────
@@ -101,7 +105,7 @@ const hermesEditorTheme = EditorView.theme(
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function Editor({ pageId, content, pageTitles, personaTitles, onChange, readOnly, onCycleStatus, onLinkClick, onQuickCreate }: EditorProps) {
+export function Editor({ pageId, content, pageTitles, personaTitles, onChange, readOnly, onCycleStatus, onLinkClick, onQuickCreate, cursorPosition, onCursorPositionUsed }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyComp = useRef(new Compartment());
@@ -123,6 +127,9 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
 
   const onQuickCreateRef = useRef(onQuickCreate);
   onQuickCreateRef.current = onQuickCreate;
+
+  const onCursorPositionUsedRef = useRef(onCursorPositionUsed);
+  onCursorPositionUsedRef.current = onCursorPositionUsed;
 
   // TASK-045: Track when autocomplete has no matches for quick-create trigger
   const typedTextRef = useRef<{ type: 'wiki' | 'mention'; text: string } | null>(null);
@@ -333,8 +340,12 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
-    // Position cursor at the end of the document on initial mount (TASK-042)
-    view.dispatch({ selection: { anchor: content.length } });
+    // TASK-050: Position cursor at specified position or end of document (TASK-042)
+    const initialCursor = cursorPosition ?? content.length;
+    view.dispatch({ selection: { anchor: initialCursor } });
+    if (cursorPosition !== null && cursorPosition !== undefined) {
+      onCursorPositionUsedRef.current?.();
+    }
 
     return () => {
       view.destroy();
@@ -352,14 +363,18 @@ export function Editor({ pageId, content, pageTitles, personaTitles, onChange, r
     if (!view) return;
     const current = view.state.doc.toString();
 
-    // If switching page, reset cursor to end
+    // If switching page, reset cursor to end (or cursorPosition if specified)
     if (pageId !== lastPageId.current) {
       lastPageId.current = pageId;
+      const targetCursor = cursorPosition ?? content.length;
       view.dispatch({
         changes: { from: 0, to: current.length, insert: content },
-        selection: { anchor: content.length },
+        selection: { anchor: targetCursor },
         scrollIntoView: true,
       });
+      if (cursorPosition !== null && cursorPosition !== undefined) {
+        onCursorPositionUsedRef.current?.();
+      }
       return;
     }
 

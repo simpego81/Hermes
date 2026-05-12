@@ -21,7 +21,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>('free');
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('timeline');
   const [groupFilter, setGroupFilter] = useState<PageType | null>(null);
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [navForward, setNavForward] = useState<string[]>([]);
@@ -31,6 +31,7 @@ export default function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardPrefilledName, setWizardPrefilledName] = useState<string | null>(null);
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState<number | null>(null);
 
   // Suppress history-push when navigating via breadcrumbs or back-button.
   const suppressHistoryRef = useRef(false);
@@ -198,13 +199,11 @@ export default function App() {
     );
   }, [selectedPage]);
 
-  // ── Vault opening ───────────────────────────────────────────────────────
-  const openVault = useCallback(async () => {
+  // ── Vault loading helper (TASK-054) ─────────────────────────────────────
+  const loadVault = useCallback(async (dir: string) => {
     if (!window.hermesDesktop?.vault) return;
     setLoading(true);
     try {
-      const dir = await window.hermesDesktop.vault.openDialog();
-      if (!dir) return;
       const files = await window.hermesDesktop.vault.readFiles(dir);
       const loaded = files.map((f: VaultFile) => pageFromSource(f.path, f.content));
       setPages(loaded);
@@ -213,10 +212,20 @@ export default function App() {
       setSearchQuery('');
       setNavHistory([]);
       setNavForward([]);
+      // Save as last workspace
+      await window.hermesDesktop.vault.setLastPath(dir);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // ── Vault opening ───────────────────────────────────────────────────────
+  const openVault = useCallback(async () => {
+    if (!window.hermesDesktop?.vault) return;
+    const dir = await window.hermesDesktop.vault.openDialog();
+    if (!dir) return;
+    await loadVault(dir);
+  }, [loadVault]);
 
   // ── Page Creation via Wizard (TASK-023) ──────────────────────────────────
   const openWizard = useCallback(() => {
@@ -246,6 +255,14 @@ export default function App() {
 
       setPages((prev) => [...prev, newPage]);
       setSelectedId(newPageId);
+
+      // TASK-050: Position cursor after title line in new page
+      // Content structure: frontmatter + \n\n + # title + \n\n + body
+      const titleLineEnd = newContent.indexOf('\n', newContent.indexOf('# '));
+      if (titleLineEnd !== -1) {
+        // Position after title + following blank line
+        setCursorPosition(titleLineEnd + 2);
+      }
     },
     [vaultPath],
   );
@@ -356,6 +373,22 @@ export default function App() {
     });
   }, [openWizard, openVault]);
 
+  // ── Auto-load last workspace on mount (TASK-054) ────────────────────────
+  useEffect(() => {
+    const autoLoad = async () => {
+      if (!window.hermesDesktop?.vault) return;
+      try {
+        const lastPath = await window.hermesDesktop.vault.getLastPath();
+        if (lastPath) {
+          await loadVault(lastPath);
+        }
+      } catch (err) {
+        console.error('Failed to auto-load last workspace:', err);
+      }
+    };
+    void autoLoad();
+  }, [loadVault]);
+
   // ── Reconstruct raw markdown from current HermesPage (for editor) ───────
   const editorContent = useMemo(() => {
     if (!selectedPage) return '';
@@ -432,6 +465,8 @@ export default function App() {
                 onCycleStatus={handleCycleStatus}
                 onLinkClick={handleLinkClick}
                 onQuickCreate={handleQuickCreate}
+                cursorPosition={cursorPosition}
+                onCursorPositionUsed={() => setCursorPosition(null)}
               />
             ) : (
               <div className="editor-placeholder">

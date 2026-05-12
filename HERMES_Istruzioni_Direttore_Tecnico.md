@@ -14,22 +14,17 @@ Sviluppare **Hermes**, un clone personalizzato di Obsidian per project manager, 
 
 ### Gerarchia:
 - **Direttore Dipartimento Tecnico** (Gemini CLI) - TU
-  - Coordinamento generale
-  - Definizione specifiche tecniche
-  - Gestione feedback utente
-  - Creazione e assegnazione task
+  - Coordinamento generale e gestione `PROJECT_STATE.md`.
+
+- **Senior Systems Architect** (Claude Code)
+  - Refactoring, Performance, Core Logic.
+  - Revisione tecnica del lavoro di Manus.
 
 - **Responsabile R&D** (Manus)
-  - Sviluppo funzionalità
-  - Implementazione architettura
-  - Report al Direttore Tecnico
+  - Sviluppo funzionalità e UI.
 
 - **Responsabile Test & Validation** (Copilot)
-  - Setup progetto GitHub
-  - Pipeline CI/CD
-  - Test automatizzati
-  - Badge di qualità
-  - Report al Direttore Tecnico
+  - Testing, CI/CD, Qualità.
 
 ---
 

@@ -27,39 +27,44 @@ function mkNonTask(title: string, type: 'persona' | 'objective' | 'note' = 'note
 }
 
 // ── Priority Logic ──────────────────────────────────────────────────────────
+// FEEDBACK011: New 3-level priority system
+// Score = (explicitScore * 10000) + (incomingScore * 100) - outgoingScore
+// Lower score = higher priority
 
 describe('computeTaskPriorities', () => {
-  test('task with no links has priority 0', () => {
+  test('task with no links has base score 30000', () => {
     const pages = [mkTask('Solo')];
     const result = computeTaskPriorities(pages);
     expect(result).toHaveLength(1);
-    expect(result[0].priority).toBe(0);
+    // explicit=undefined(3), incoming=0, outgoing=0 → 3*10000 + 0 - 0 = 30000
+    expect(result[0].priority).toBe(30000);
   });
 
-  test('task linking to a non-task has priority 0', () => {
+  test('task linking to a non-task has base score 30000', () => {
     const pages = [mkTask('T1', ['PersonaX']), mkNonTask('PersonaX', 'persona')];
     const result = computeTaskPriorities(pages);
     const t1 = result.find((r) => r.page.title === 'T1')!;
-    expect(t1.priority).toBe(0);
+    // Persona links don't count as outgoing (only task/component/objective)
+    expect(t1.priority).toBe(30000);
   });
 
-  test('simple chain A->B->C gives correct priorities', () => {
-    // C has no task links → priority 0
-    // B links to C → priority 1
-    // A links to B → priority 2
+  test('simple chain A->B->C: fewer incoming + more outgoing = higher priority', () => {
+    // A: incoming=0, outgoing=1(B) → score = 30000 + 0 - 1 = 29999 (highest priority)
+    // B: incoming=1(A), outgoing=1(C) → score = 30000 + 100 - 1 = 30099
+    // C: incoming=1(B), outgoing=0 → score = 30000 + 100 - 0 = 30100 (lowest priority)
     const pages = [mkTask('A', ['B']), mkTask('B', ['C']), mkTask('C')];
     const result = computeTaskPriorities(pages);
     const map = new Map(result.map((r) => [r.page.title, r.priority]));
-    expect(map.get('C')).toBe(0);
-    expect(map.get('B')).toBe(1);
-    expect(map.get('A')).toBe(2);
+    expect(map.get('A')).toBe(29999);
+    expect(map.get('B')).toBe(30099);
+    expect(map.get('C')).toBe(30100);
   });
 
-  test('branching: MAX(linked) + 1', () => {
-    // D → has no links → 0
-    // C → has no links → 0
-    // B → links D → 1
-    // A → links B and C → MAX(1, 0) + 1 = 2
+  test('more outgoing links to tasks = higher priority', () => {
+    // A: incoming=0, outgoing=2(B,C) → score = 30000 + 0 - 2 = 29998 (highest)
+    // B: incoming=1(A), outgoing=1(D) → score = 30000 + 100 - 1 = 30099
+    // C: incoming=1(A), outgoing=0 → score = 30000 + 100 - 0 = 30100
+    // D: incoming=1(B), outgoing=0 → score = 30000 + 100 - 0 = 30100
     const pages = [
       mkTask('A', ['B', 'C']),
       mkTask('B', ['D']),
@@ -68,10 +73,37 @@ describe('computeTaskPriorities', () => {
     ];
     const result = computeTaskPriorities(pages);
     const map = new Map(result.map((r) => [r.page.title, r.priority]));
-    expect(map.get('D')).toBe(0);
-    expect(map.get('C')).toBe(0);
-    expect(map.get('B')).toBe(1);
-    expect(map.get('A')).toBe(2);
+    expect(map.get('A')).toBe(29998);
+    expect(map.get('B')).toBe(30099);
+    expect(map.get('C')).toBe(30100);
+    expect(map.get('D')).toBe(30100);
+  });
+
+  test('explicit priority (HIGH/MEDIUM/LOW) takes precedence over links', () => {
+    // Create task helper with priority
+    const mkTaskPri = (title: string, priority: string, links: string[] = []) => ({
+      id: `${title}.md`,
+      title,
+      type: 'task' as const,
+      metadata: { type: 'task' as const, status: 'TO-DO', priority },
+      body: links.map((l) => `[[${l}]]`).join(' '),
+      links,
+    });
+
+    const pages = [
+      mkTaskPri('HighPri', 'HIGH', []),      // 0*10000 + 0 - 0 = 0
+      mkTaskPri('MediumPri', 'MEDIUM', []), // 1*10000 + 0 - 0 = 10000
+      mkTaskPri('LowPri', 'LOW', []),       // 2*10000 + 0 - 0 = 20000
+      mkTask('NoPri', []),                  // 3*10000 + 0 - 0 = 30000
+    ];
+    const result = computeTaskPriorities(pages);
+    const sorted = result.sort((a, b) => a.priority - b.priority);
+
+    expect(sorted.map((t) => t.page.title)).toEqual(['HighPri', 'MediumPri', 'LowPri', 'NoPri']);
+    expect(sorted[0].priority).toBe(0);
+    expect(sorted[1].priority).toBe(10000);
+    expect(sorted[2].priority).toBe(20000);
+    expect(sorted[3].priority).toBe(30000);
   });
 
   test('cycle A->B->A does not crash and returns finite priorities', () => {
@@ -94,12 +126,13 @@ describe('computeTaskPriorities', () => {
   });
 
   test('cycle with outgoing chain: cycle member linking to tail', () => {
-    // A -> B -> A (cycle), B -> C (no links -> 0)
-    // B's links: [A, C]. A is in cycle → 0, C → 0. MAX(0,0)+1 = 1
+    // A -> B -> A (cycle), B -> C
+    // C: incoming=1(B), outgoing=0 → 30100
+    // A and B are in cycle, both have incoming=1, different outgoing counts
     const pages = [mkTask('A', ['B']), mkTask('B', ['A', 'C']), mkTask('C')];
     const result = computeTaskPriorities(pages);
     const map = new Map(result.map((r) => [r.page.title, r.priority]));
-    expect(map.get('C')).toBe(0);
+    expect(map.get('C')).toBe(30100); // incoming from B
     // B and A should have finite priorities despite the cycle
     expect(Number.isFinite(map.get('A')!)).toBe(true);
     expect(Number.isFinite(map.get('B')!)).toBe(true);
@@ -121,8 +154,12 @@ describe('computeTaskPriorities', () => {
     expect(result).toHaveLength(0);
   });
 
-  test('long chain produces incrementing priorities', () => {
-    // E(0) <- D(1) <- C(2) <- B(3) <- A(4)
+  test('long chain: priority decreases with more incoming links', () => {
+    // A: incoming=0, outgoing=1 → 30000 + 0 - 1 = 29999 (highest priority)
+    // B: incoming=1, outgoing=1 → 30000 + 100 - 1 = 30099
+    // C: incoming=1, outgoing=1 → 30000 + 100 - 1 = 30099
+    // D: incoming=1, outgoing=1 → 30000 + 100 - 1 = 30099
+    // E: incoming=1, outgoing=0 → 30000 + 100 - 0 = 30100 (lowest priority)
     const pages = [
       mkTask('A', ['B']),
       mkTask('B', ['C']),
@@ -132,20 +169,23 @@ describe('computeTaskPriorities', () => {
     ];
     const result = computeTaskPriorities(pages);
     const map = new Map(result.map((r) => [r.page.title, r.priority]));
-    expect(map.get('E')).toBe(0);
-    expect(map.get('D')).toBe(1);
-    expect(map.get('C')).toBe(2);
-    expect(map.get('B')).toBe(3);
-    expect(map.get('A')).toBe(4);
+    expect(map.get('A')).toBe(29999);
+    expect(map.get('B')).toBe(30099);
+    expect(map.get('C')).toBe(30099);
+    expect(map.get('D')).toBe(30099);
+    expect(map.get('E')).toBe(30100);
   });
 
-  test('diamond dependency picks MAX', () => {
+  test('diamond dependency: incoming links affect priority', () => {
     //       A
     //      / \
     //     B   C
     //      \ /
     //       D
-    // D=0, B=MAX(D)+1=1, C=MAX(D)+1=1, A=MAX(B,C)+1=2
+    // A: incoming=0, outgoing=2(B,C) → 30000 + 0 - 2 = 29998 (highest)
+    // B: incoming=1(A), outgoing=1(D) → 30000 + 100 - 1 = 30099
+    // C: incoming=1(A), outgoing=1(D) → 30000 + 100 - 1 = 30099
+    // D: incoming=2(B,C), outgoing=0 → 30000 + 200 - 0 = 30200 (lowest)
     const pages = [
       mkTask('A', ['B', 'C']),
       mkTask('B', ['D']),
@@ -154,40 +194,42 @@ describe('computeTaskPriorities', () => {
     ];
     const result = computeTaskPriorities(pages);
     const map = new Map(result.map((r) => [r.page.title, r.priority]));
-    expect(map.get('D')).toBe(0);
-    expect(map.get('B')).toBe(1);
-    expect(map.get('C')).toBe(1);
-    expect(map.get('A')).toBe(2);
+    expect(map.get('A')).toBe(29998);
+    expect(map.get('B')).toBe(30099);
+    expect(map.get('C')).toBe(30099);
+    expect(map.get('D')).toBe(30200);
   });
 });
 
 // ── Task List ordering ──────────────────────────────────────────────────────
 
 describe('Task List ordering', () => {
-  test('TO-DO tasks are sorted by ascending priority', () => {
+  test('TO-DO tasks are sorted by ascending priority (lower score = higher priority)', () => {
     const pages = [
-      mkTask('Leaf', [], 'TO-DO'),
-      mkTask('Mid', ['Leaf'], 'TO-DO'),
-      mkTask('Root', ['Mid'], 'TO-DO'),
+      mkTask('Leaf', [], 'TO-DO'),      // incoming=1(Mid), outgoing=0 → 30100
+      mkTask('Mid', ['Leaf'], 'TO-DO'), // incoming=1(Root), outgoing=1(Leaf) → 30099
+      mkTask('Root', ['Mid'], 'TO-DO'), // incoming=0, outgoing=1(Mid) → 29999
     ];
     const result = computeTaskPriorities(pages);
     const todos = result
       .filter((t) => t.page.metadata.status === 'TO-DO')
       .sort((a, b) => a.priority - b.priority);
-    expect(todos.map((t) => t.page.title)).toEqual(['Leaf', 'Mid', 'Root']);
-    expect(todos.map((t) => t.priority)).toEqual([0, 1, 2]);
+    // Root has lowest score (29999) → highest priority, appears first
+    expect(todos.map((t) => t.page.title)).toEqual(['Root', 'Mid', 'Leaf']);
+    expect(todos.map((t) => t.priority)).toEqual([29999, 30099, 30100]);
   });
 
   test('WAITING tasks are sorted by ascending priority', () => {
     const pages = [
-      mkTask('W-Leaf', [], 'WAITING'),
-      mkTask('W-Root', ['W-Leaf'], 'WAITING'),
+      mkTask('W-Leaf', [], 'WAITING'),      // incoming=1(W-Root), outgoing=0 → 30100
+      mkTask('W-Root', ['W-Leaf'], 'WAITING'), // incoming=0, outgoing=1(W-Leaf) → 29999
     ];
     const result = computeTaskPriorities(pages);
     const waiting = result
       .filter((t) => t.page.metadata.status === 'WAITING')
       .sort((a, b) => a.priority - b.priority);
-    expect(waiting.map((t) => t.page.title)).toEqual(['W-Leaf', 'W-Root']);
+    // W-Root has lower score → appears first
+    expect(waiting.map((t) => t.page.title)).toEqual(['W-Root', 'W-Leaf']);
   });
 
   test('DONE tasks are excluded from TO-DO and WAITING lists', () => {
@@ -207,11 +249,11 @@ describe('Task List ordering', () => {
 
   test('mixed statuses with priorities sort correctly per section', () => {
     const pages = [
-      mkTask('T-A', ['T-B'], 'TO-DO'),   // priority 1
-      mkTask('T-B', [], 'TO-DO'),          // priority 0
-      mkTask('W-A', ['W-B'], 'WAITING'),   // priority 1
-      mkTask('W-B', [], 'WAITING'),        // priority 0
-      mkTask('Done1', [], 'DONE'),         // excluded
+      mkTask('T-A', ['T-B'], 'TO-DO'),   // incoming=0, outgoing=1 → 29999 (higher priority)
+      mkTask('T-B', [], 'TO-DO'),        // incoming=1(T-A), outgoing=0 → 30100 (lower priority)
+      mkTask('W-A', ['W-B'], 'WAITING'), // incoming=0, outgoing=1 → 29999
+      mkTask('W-B', [], 'WAITING'),      // incoming=1(W-A), outgoing=0 → 30100
+      mkTask('Done1', [], 'DONE'),       // excluded
     ];
     const result = computeTaskPriorities(pages);
     const todos = result
@@ -221,8 +263,9 @@ describe('Task List ordering', () => {
       .filter((t) => t.page.metadata.status === 'WAITING')
       .sort((a, b) => a.priority - b.priority);
 
-    expect(todos.map((t) => t.page.title)).toEqual(['T-B', 'T-A']);
-    expect(waiting.map((t) => t.page.title)).toEqual(['W-B', 'W-A']);
+    // T-A has lower score (29999) than T-B (30100) → appears first
+    expect(todos.map((t) => t.page.title)).toEqual(['T-A', 'T-B']);
+    expect(waiting.map((t) => t.page.title)).toEqual(['W-A', 'W-B']);
   });
 });
 

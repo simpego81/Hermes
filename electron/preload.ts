@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       ipcRenderer.invoke('vault:delete-file', dirPath, relPath),
     renameFile: (dirPath: string, oldRelPath: string, newRelPath: string): Promise<void> =>
       ipcRenderer.invoke('vault:rename-file', dirPath, oldRelPath, newRelPath),
+    getLastPath: (): Promise<string | null> =>
+      ipcRenderer.invoke('vault:get-last-path'),
+    setLastPath: (dirPath: string | null): Promise<void> =>
+      ipcRenderer.invoke('vault:set-last-path', dirPath),
   },
   onMenuNewPage: (callback: () => void) =>
     ipcRenderer.on('menu:new-page', () => callback()),

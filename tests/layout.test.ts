@@ -450,7 +450,8 @@ describe('computeTimelineLanes', () => {
   it('returns 5 lanes (one per page type)', () => {
     const lanes = computeTimelineLanes(CANVAS_W, CANVAS_H, -200);
     expect(lanes).toHaveLength(5);
-    expect(lanes.map((l) => l.type)).toEqual(['objective', 'task', 'persona', 'component', 'note']);
+    // FEEDBACK011: New vertical order - objective, component, task, persona, note
+    expect(lanes.map((l) => l.type)).toEqual(['objective', 'component', 'task', 'persona', 'note']);
   });
 
   it('positions objective lane above the timeline axis', () => {

@@ -67,34 +67,58 @@ export interface TaskWithPriority {
 }
 
 /**
- * Compute priority for each task page.
- * Priority = MAX(priority of linked tasks) + 1.
- * If a task has no links to other tasks, its priority is 0.
- * Handles cycles by returning 0 for any node in a cycle path.
+ * FEEDBACK011 — Multi-level task priority algorithm.
+ *
+ * Priority is computed using 3 levels (in order of precedence):
+ * 1. Explicit priority field (HIGH > MEDIUM > LOW > undefined)
+ * 2. Incoming links count (fewer incoming links = higher priority)
+ * 3. Outgoing links to task/component/objective (more outgoing = higher priority)
+ *
+ * Lower score = higher priority (TaskList sorts ascending).
+ *
+ * Score formula:
+ *   score = (explicitScore * 10000) + (incomingScore * 100) - outgoingScore
+ *
+ * Where:
+ *   - explicitScore: HIGH=0, MEDIUM=1, LOW=2, undefined=3
+ *   - incomingScore: count of backlinks (capped at 100)
+ *   - outgoingScore: count of links to task/component/objective (capped at 100)
  */
 export function computeTaskPriorities(pages: HermesPage[]): TaskWithPriority[] {
   const tasks = pages.filter((p) => p.type === 'task');
-  const taskByTitle = new Map(tasks.map((t) => [t.title, t]));
-  const memo = new Map<string, number>();
-  const visiting = new Set<string>();
 
-  function dfs(title: string): number {
-    if (memo.has(title)) return memo.get(title)!;
-    if (visiting.has(title)) return 0; // cycle detected
-    const task = taskByTitle.get(title);
-    if (!task) return 0;
-    visiting.add(title);
-    let maxChild = -1;
-    for (const link of task.links) {
-      if (taskByTitle.has(link)) {
-        maxChild = Math.max(maxChild, dfs(link));
-      }
-    }
-    visiting.delete(title);
-    const priority = maxChild >= 0 ? maxChild + 1 : 0;
-    memo.set(title, priority);
-    return priority;
-  }
+  // Build reverse link index: target title -> sources that link to it
+  const backlinks = new Map<string, string[]>();
+  pages.forEach((p) => {
+    p.links.forEach((targetTitle) => {
+      if (!backlinks.has(targetTitle)) backlinks.set(targetTitle, []);
+      backlinks.get(targetTitle)!.push(p.title);
+    });
+  });
 
-  return tasks.map((t) => ({ page: t, priority: dfs(t.title) }));
+  return tasks.map((task) => {
+    // Level 1: Explicit priority
+    const explicitPriority = task.metadata.priority as string | undefined;
+    const explicitScore =
+      explicitPriority === 'HIGH' ? 0 :
+      explicitPriority === 'MEDIUM' ? 1 :
+      explicitPriority === 'LOW' ? 2 : 3;
+
+    // Level 2: Incoming links (backlinks to this task)
+    const incomingCount = (backlinks.get(task.title) ?? []).length;
+    const incomingScore = Math.min(incomingCount, 100);
+
+    // Level 3: Outgoing links to task/component/objective
+    const relevantTypes = new Set(['task', 'component', 'objective']);
+    const outgoingCount = task.links.filter((linkTitle) => {
+      const target = pages.find((p) => p.title === linkTitle);
+      return target && relevantTypes.has(target.type);
+    }).length;
+    const outgoingScore = Math.min(outgoingCount, 100);
+
+    // Combine scores: lower total = higher priority
+    const score = explicitScore * 10000 + incomingScore * 100 - outgoingScore;
+
+    return { page: task, priority: score };
+  });
 }

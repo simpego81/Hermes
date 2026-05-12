@@ -15,7 +15,7 @@ export const PAGE_TEMPLATES: Record<PageType, PageTemplate> = {
     frontmatter: `---
 type: persona
 ---`,
-    body: 'Description of this person and their role in the project.',
+    body: '',
   },
   task: {
     type: 'task',
@@ -28,7 +28,7 @@ assignees:
 dependencies:
 needed_for:
 ---`,
-    body: 'Describe the task objectives and acceptance criteria here.',
+    body: '',
   },
   objective: {
     type: 'objective',
@@ -40,7 +40,7 @@ tasks:
 dependencies:
 stakeholders:
 ---`,
-    body: 'Describe the objective, expected outcomes, and success metrics.',
+    body: '',
   },
   component: {
     type: 'component',
@@ -48,7 +48,7 @@ stakeholders:
     frontmatter: `---
 type: component
 ---`,
-    body: 'Describe this system component, its responsibilities and interfaces.',
+    body: '',
   },
   note: {
     type: 'note',
@@ -56,7 +56,7 @@ type: component
     frontmatter: `---
 type: note
 ---`,
-    body: 'Free-form notes and observations.',
+    body: '',
   },
 };
 
