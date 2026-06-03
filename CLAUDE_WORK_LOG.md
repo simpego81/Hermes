@@ -1,11 +1,20 @@
 # 🏗️ CLAUDE CODE - WORK LOG
 **Ruolo:** Senior Systems Architect  
-**Ultimo Aggiornamento:** 2026-05-12 (project consistency check + FEEDBACK011 test fixes)
+**Ultimo Aggiornamento:** 2026-06-03 (FEEDBACK012 implementation)
 
 ---
 
 ## 🎯 FOCUS CORRENTE
-✅ **COMPLETATO** - Project consistency validation + test suite fixes (Session 2026-05-12):
+🔄 **IN CORSO** - FEEDBACK012: Simplified timeline UI with full-width category boxes (Session 2026-06-03):
+- Timeline mode always selected by default
+- Removed "Group by Category" button and category filter dropdown
+- All category boxes (Task, Persona, Component, Note) always visible at full width
+- Nodes confined to their category lanes with padding
+- Task nodes biased toward left side of their lane
+- Unit tests passing, E2E tests running
+
+**Previous session (2026-05-12)**: Project consistency validation + test suite fixes
+**Previous session (2026-05-10 afternoon)**: TASK-045, 047, 048 implementation
 - Verified project state after PC shutdown: code integrity ✓, TypeScript ✓
 - Fixed 12 failing tests after FEEDBACK011 implementation
 - Updated priority algorithm tests to match new 3-level system

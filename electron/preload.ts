@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
       ipcRenderer.invoke('vault:get-last-path'),
     setLastPath: (dirPath: string | null): Promise<void> =>
       ipcRenderer.invoke('vault:set-last-path', dirPath),
+    getTestVaultPath: (): Promise<string | null> =>
+      ipcRenderer.invoke('vault:get-test-vault-path'),
   },
   onMenuNewPage: (callback: () => void) =>
     ipcRenderer.on('menu:new-page', () => callback()),

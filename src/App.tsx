@@ -22,7 +22,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('timeline');
-  const [groupFilter, setGroupFilter] = useState<PageType | null>(null);
+  // FEEDBACK012: Removed groupFilter — all categories always visible in timeline
+  const [laneRepulsion, setLaneRepulsion] = useState(80);
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [navForward, setNavForward] = useState<string[]>([]);
   const [showGraph, setShowGraph] = useState(true);
@@ -373,17 +374,25 @@ export default function App() {
     });
   }, [openWizard, openVault]);
 
-  // ── Auto-load last workspace on mount (TASK-054) ────────────────────────
+  // ── Auto-load workspace on mount (TASK-054 + E2E test support) ──────────
   useEffect(() => {
     const autoLoad = async () => {
       if (!window.hermesDesktop?.vault) return;
       try {
+        // E2E test mode: prioritize test vault if HERMES_TEST_VAULT_PATH is set
+        const testVaultPath = await window.hermesDesktop.vault.getTestVaultPath();
+        if (testVaultPath) {
+          await loadVault(testVaultPath);
+          return;
+        }
+
+        // Normal mode: load last workspace (TASK-054)
         const lastPath = await window.hermesDesktop.vault.getLastPath();
         if (lastPath) {
           await loadVault(lastPath);
         }
       } catch (err) {
-        console.error('Failed to auto-load last workspace:', err);
+        console.error('Failed to auto-load workspace:', err);
       }
     };
     void autoLoad();
@@ -423,14 +432,14 @@ export default function App() {
         {showGraph && (
           <div className={`center-graph${fullscreenGraph ? ' fullscreen' : ''}`}>
             <main className="graph-area">
-              <Toolbar layoutMode={layoutMode} onLayoutChange={setLayoutMode} groupFilter={groupFilter} onGroupFilterChange={setGroupFilter} />
+              <Toolbar layoutMode={layoutMode} onLayoutChange={setLayoutMode} laneRepulsion={laneRepulsion} onLaneRepulsionChange={setLaneRepulsion} />
               {loading && <div className="loading-overlay">Loading vault…</div>}
               <Graph
                 data={graphData}
                 pages={pages}
                 selectedId={selectedId}
                 layoutMode={layoutMode}
-                groupFilter={groupFilter}
+                laneRepulsion={laneRepulsion}
                 onNodeClick={selectPage}
               />
             </main>

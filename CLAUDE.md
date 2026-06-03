@@ -45,6 +45,21 @@ npm test -- --testNamePattern="Timeline"
 npm test -- --watch
 ```
 
+### Running E2E Tests (Playwright)
+```bash
+# Run all E2E tests
+npm run test:e2e
+
+# Run with UI mode (interactive debugging)
+npm run test:e2e:ui
+
+# Run with visible browser window
+npm run test:e2e:headed
+
+# View test report
+npm run test:e2e:report
+```
+
 ## Multi-Agent Development Workflow
 
 Hermes is developed by a coordinated team of AI agents with distinct roles:
@@ -166,6 +181,15 @@ All tests use Jest with ts-jest. Coverage thresholds: 90% statements/lines, 80% 
 - **wiki-integrity.test.ts**: Broken link detection, page renaming
 - **performance.test.ts**: Large vault benchmarks (>500 nodes)
 
+**E2E Tests** (`tests/e2e/`): Playwright-based visual verification for UI changes.
+- **timeline-layout.e2e.ts**: Timeline mode visual tests (lane stratification, deadline positioning, labels)
+
+**Test Vault** (`tests/fixtures/test-vault/`): Representative pages covering:
+- Objectives with early/late deadlines (Objective Alpha, Beta)
+- Tasks with/without deadlines (tests pinned vs draggable nodes)
+- All page types (Persona, Component, Note)
+- Wiki-link relationships (tests depth-based positioning)
+
 ## Development Guidelines
 
 ### Performance Constraints
@@ -196,6 +220,28 @@ Timeline mode **must maintain**:
 - Layout changes must update `layout.test.ts` with snapshot or behavior tests
 - Schema changes must update `schema.test.ts` validation tests
 - Aim for coverage thresholds: 90% statements, 80% branches, 100% functions
+
+### UI Verification (CRITICAL for Graph/Timeline Changes)
+**Problem**: UI changes were previously marked "resolved" without visual verification, causing persistent bugs.
+
+**Solution**: E2E testing with Playwright for screenshot-based verification.
+
+**MANDATORY for any Graph/Timeline/Layout/Label change**:
+1. Make code changes
+2. Run E2E tests: `npm run test:e2e` (or `npm run test:e2e:headed` to watch)
+3. Review screenshots in `test-results/screenshots/` or use `npm run test:e2e:report`
+4. Verify visual aspects (see `VERIFICATION_GUIDE.md`)
+5. If tests fail, use `npm run test:e2e:ui` for interactive debugging
+6. **ONLY THEN** mark as resolved
+
+**Key visual checks**:
+- Lane stratification: Objective > Component > Task > Persona > Note
+- Deadline positioning on timeline axis
+- Label readability without severe overlap
+- Draggable vs pinned nodes
+- Jitter spacing for non-deadline nodes
+
+**See `VERIFICATION_GUIDE.md` for complete workflow.**
 
 ## Common Tasks
 

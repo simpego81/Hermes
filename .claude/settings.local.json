@@ -5,7 +5,11 @@
       "Bash(npm run *)",
       "Bash(npm outdated *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(npm install *)",
+      "Bash(chmod +x *)",
+      "Bash(npx playwright *)",
+      "Bash(echo \"File readable: $?\")"
     ]
   }
 }

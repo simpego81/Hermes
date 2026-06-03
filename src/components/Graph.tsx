@@ -38,14 +38,15 @@ interface GraphProps {
   pages: HermesPage[];
   selectedId: string | null;
   layoutMode: LayoutMode;
-  groupFilter?: PageType | null;
+  laneRepulsion: number;
   onNodeClick(id: string): void;
 }
 
 const LABEL_ZOOM_THRESHOLD = 1.2;
 const BASE_FONT_PX = 13;
 
-export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNodeClick }: GraphProps) {
+// FEEDBACK012: Removed groupFilter — all categories always visible in timeline
+export function Graph({ data, pages, selectedId, layoutMode, laneRepulsion, onNodeClick }: GraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -172,20 +173,8 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
 
     if (layoutMode === 'grouped') {
       const boxes = computeGroupBoxes(size.width, size.height);
-      // When groupFilter is set, use a large centered box for the selected category only.
-      let activeBoxes: typeof boxes;
-      if (groupFilter) {
-        const PAD = 60;
-        activeBoxes = [{
-          type: groupFilter,
-          cx: 0,
-          cy: 0,
-          hw: size.width / 2 - PAD,
-          hh: size.height / 2 - PAD,
-        }];
-      } else {
-        activeBoxes = boxes;
-      }
+      // FEEDBACK012: Removed groupFilter, always show all boxes
+      const activeBoxes = boxes;
       const boxMap = new Map(activeBoxes.map((b) => [b.type, b]));
 
       // Pre-position nodes sorted by importance (val desc) within each box.
@@ -219,27 +208,8 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
               n.vy = (n.vy ?? 0) + (box.cy - (n.y ?? 0)) * STRENGTH * alpha;
               n.x = Math.max(box.cx - box.hw + MARGIN, Math.min(box.cx + box.hw - MARGIN, n.x ?? 0));
               n.y = Math.max(box.cy - box.hh + MARGIN, Math.min(box.cy + box.hh - MARGIN, n.y ?? 0));
-            } else if (groupFilter) {
-              // Non-matching node: push it outside the active box
-              const aBox = activeBoxes[0];
-              const nx = n.x ?? 0;
-              const ny = n.y ?? 0;
-              const inBoxX = nx > aBox.cx - aBox.hw && nx < aBox.cx + aBox.hw;
-              const inBoxY = ny > aBox.cy - aBox.hh && ny < aBox.cy + aBox.hh;
-              if (inBoxX && inBoxY) {
-                // Push outward based on closest edge
-                const dLeft = nx - (aBox.cx - aBox.hw);
-                const dRight = (aBox.cx + aBox.hw) - nx;
-                const dTop = ny - (aBox.cy - aBox.hh);
-                const dBottom = (aBox.cy + aBox.hh) - ny;
-                const minD = Math.min(dLeft, dRight, dTop, dBottom);
-                const PUSH = 0.3;
-                if (minD === dLeft) n.vx = (n.vx ?? 0) - PUSH * alpha * 50;
-                else if (minD === dRight) n.vx = (n.vx ?? 0) + PUSH * alpha * 50;
-                else if (minD === dTop) n.vy = (n.vy ?? 0) - PUSH * alpha * 50;
-                else n.vy = (n.vy ?? 0) + PUSH * alpha * 50;
-              }
             }
+            // FEEDBACK012: Removed groupFilter logic
           });
         },
         { initialize: (ns: SimNode[]) => { forceNodes = ns; } },
@@ -251,20 +221,12 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
       const TIMELINE_Y = -(size.height * 0.28);
       const FREE_Y_BIAS = size.height * 0.14;
 
-      // Swim lanes only when a category filter is active
-      // Objectives are excluded since they sit on the timeline axis (TASK-043)
-      const lanes = groupFilter && groupFilter !== 'objective'
-        ? computeTimelineLanes(size.width, size.height, TIMELINE_Y).filter(l => l.type === groupFilter)
-        : [];
-      const laneMap = new Map(lanes.map((l) => [l.type, l]));
+      // FEEDBACK012: All category lanes always visible (no filtering)
+      const allLanes = computeTimelineLanes(size.width, size.height, TIMELINE_Y);
+      const fullLaneMap = new Map(allLanes.map((l) => [l.type, l]));
 
       // Pin deadline nodes at their x position, centered in their type's lane.
       const pinned = new Map<string, { fx: number; fy: number }>();
-
-      // FEEDBACK008 Req 4-5: Use lane-based stratification for all types
-      // Build lane map from computeTimelineLanes (includes all 5 types now)
-      const allLanes = computeTimelineLanes(size.width, size.height, TIMELINE_Y);
-      const fullLaneMap = new Map(allLanes.map((l) => [l.type, l]));
 
       liveNodes.forEach((n) => {
         const entry = positions.get(n.id);
@@ -272,47 +234,38 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
           // Use lane positioning for all types (not just filtered ones)
           const lane = fullLaneMap.get(entry.type);
           const yPos = lane ? lane.cy : TIMELINE_Y;
-          n.fx = entry.x;
-          n.fy = yPos;
-          n.x = entry.x;
-          n.y = yPos;
-          n.vx = 0;
-          n.vy = 0;
-          pinned.set(n.id, { fx: entry.x, fy: yPos });
-        } else if (laneMap.has(n.type)) {
-          // Non-deadline node of a lane type: place inside its lane
-          // FEEDBACK007: Preserve existing position to avoid bounce on edits
-          const lane = laneMap.get(n.type)!;
-          if (n.x === undefined || n.y === undefined) {
-            n.x = lane.cx + (Math.random() - 0.5) * lane.hw;
-            n.y = lane.cy + (Math.random() - 0.5) * lane.hh * 0.5;
-          }
-          n.vx = 0;
-          n.vy = 0;
-        } else if (n.type === 'persona' && groupFilter === 'persona') {
-          // Persona grouping box: wide as the timeline (TASK-043)
-          const pBox = {
-            cx: 0,
-            cy: FREE_Y_BIAS + 80,
-            hw: size.width / 2 - 50,
-            hh: 60,
-          };
-          // Margin 20%
-          const innerHW = pBox.hw * 0.8;
-          const innerHH = pBox.hh * 0.8;
-          // FEEDBACK007: Preserve existing position to avoid bounce on edits
-          if (n.x === undefined || n.y === undefined) {
-            n.x = pBox.cx + (Math.random() - 0.5) * innerHW * 2;
-            n.y = pBox.cy + (Math.random() - 0.5) * innerHH * 2;
-          }
-          n.vx = 0;
-          n.vy = 0;
-        } else {
-          // FEEDBACK007: Preserve existing Y to avoid bounce, only set if undefined
-          if (n.y === undefined) {
-            n.y = FREE_Y_BIAS;
+          if (entry.hasDeadline) {
+            // Nodes with an explicit deadline are pinned so they stay on the timeline axis
+            n.fx = entry.x;
+            n.fy = yPos;
+            n.x = entry.x;
+            n.y = yPos;
+            n.vx = 0;
+            n.vy = 0;
+            pinned.set(n.id, { fx: entry.x, fy: yPos });
           } else {
-            n.y = Math.max(FREE_Y_BIAS, n.y);
+            // Depth-only nodes: always reset to inside their lane so they
+            // start within bounds regardless of previous layout state.
+            n.fx = undefined;
+            n.fy = undefined;
+            const clampedX = lane
+              ? Math.max(lane.cx - lane.hw * 0.9, Math.min(lane.cx + lane.hw * 0.9, entry.x))
+              : entry.x;
+            n.x = clampedX + (Math.random() - 0.5) * 60;
+            n.y = yPos + (Math.random() - 0.5) * (lane ? lane.hh * 0.6 : 40);
+            n.vx = 0;
+            n.vy = 0;
+          }
+        } else {
+          // FEEDBACK012: All non-deadline nodes placed in their category lane.
+          // Always reset position so nodes from previous layouts start inside the box.
+          const lane = fullLaneMap.get(n.type);
+          if (lane) {
+            n.x = lane.cx + (Math.random() - 0.5) * lane.hw * 1.6;
+            n.y = lane.cy + (Math.random() - 0.5) * lane.hh * 0.6;
+          } else {
+            n.x = 0;
+            n.y = FREE_Y_BIAS;
           }
           n.vx = 0;
           n.vy = 0;
@@ -350,56 +303,70 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
       }
       labelOffsetRef.current = offsets;
 
-      // Persona grouping box for zone force — only when filter active (TASK-043)
-      const showPersonaBox = groupFilter === 'persona';
-      const personaBox = {
-        cx: 0,
-        cy: FREE_Y_BIAS + 80,
-        hw: size.width / 2 - 50,
-        hh: 60,
-      };
-
-      // Zone force: keep non-pinned nodes in lanes or lower half.
+      // FEEDBACK012: Zone force - contain ALL nodes in their category lanes
       let forceNodes: SimNode[] = [];
       const zoneForce = Object.assign(
         function (alpha: number) {
+          const MARGIN = 20;
+          const REPULSION_STRENGTH = laneRepulsion; // within-lane repulsion (controlled by slider)
+
+          // Build a per-lane list of free nodes for the repulsion pass
+          const laneNodes = new Map<string, SimNode[]>();
           forceNodes.forEach((n) => {
-            if (n.fx !== undefined) return; // pinned on timeline
-            const lane = laneMap.get(n.type);
+            if (n.fx !== undefined) return;
+            const lane = fullLaneMap.get(n.type);
+            if (!lane) return;
+            const key = n.type as string;
+            if (!laneNodes.has(key)) laneNodes.set(key, []);
+            laneNodes.get(key)!.push(n);
+          });
+
+          // Within-lane repulsion: push same-category nodes apart
+          laneNodes.forEach((nodes) => {
+            for (let i = 0; i < nodes.length; i++) {
+              for (let j = i + 1; j < nodes.length; j++) {
+                const a = nodes[i];
+                const b = nodes[j];
+                const dx = (a.x ?? 0) - (b.x ?? 0);
+                const dy = (a.y ?? 0) - (b.y ?? 0);
+                const dist2 = dx * dx + dy * dy || 1;
+                const force = (REPULSION_STRENGTH * alpha) / dist2;
+                const fx = dx * force;
+                const fy = dy * force;
+                a.vx = (a.vx ?? 0) + fx;
+                a.vy = (a.vy ?? 0) + fy;
+                b.vx = (b.vx ?? 0) - fx;
+                b.vy = (b.vy ?? 0) - fy;
+              }
+            }
+          });
+
+          // Containment + attraction pass
+          forceNodes.forEach((n) => {
+            if (n.fx !== undefined) return; // pinned on timeline (deadline nodes)
+
+            const lane = fullLaneMap.get(n.type);
             if (lane) {
-              // Attract to lane center and clamp within lane bounds
-              // TASK-048: Increased strength from 0.12 to 0.35 for stronger lane containment
-              const STRENGTH = 0.35;
-              const MARGIN = 14;
-              n.vx = (n.vx ?? 0) + (lane.cx - (n.x ?? 0)) * STRENGTH * alpha * 0.3;
+              const minX = lane.cx - lane.hw + MARGIN;
+              const maxX = lane.cx + lane.hw - MARGIN;
+              const minY = lane.cy - lane.hh + MARGIN;
+              const maxY = lane.cy + lane.hh - MARGIN;
+
+              // Task nodes biased toward left side
+              const targetX = n.type === 'task' ? lane.cx - lane.hw * 0.4 : lane.cx;
+
+              // Soft attraction toward lane centre
+              const STRENGTH = 0.6;
+              n.vx = (n.vx ?? 0) + (targetX - (n.x ?? 0)) * STRENGTH * alpha * 0.3;
               n.vy = (n.vy ?? 0) + (lane.cy - (n.y ?? 0)) * STRENGTH * alpha;
-              // Hard clamp Y to prevent vertical escape from lane
-              const LANE_CLAMP = lane.hh * 0.8;
-              n.y = Math.max(lane.cy - LANE_CLAMP, Math.min(lane.cy + LANE_CLAMP, n.y ?? 0));
-            } else if (n.type === 'persona' && showPersonaBox) {
-              // Contain personas in their box only when filter is active
-              const STRENGTH = 0.12;
-              const MARGIN = 14;
-              const innerHW = personaBox.hw * 0.8;
-              const innerHH = personaBox.hh * 0.8;
-              n.vx = (n.vx ?? 0) + (personaBox.cx - (n.x ?? 0)) * STRENGTH * alpha;
-              n.vy = (n.vy ?? 0) + (personaBox.cy - (n.y ?? 0)) * STRENGTH * alpha;
-              n.x = Math.max(personaBox.cx - innerHW + MARGIN, Math.min(personaBox.cx + innerHW - MARGIN, n.x ?? 0));
-              n.y = Math.max(personaBox.cy - innerHH + MARGIN, Math.min(personaBox.cy + innerHH - MARGIN, n.y ?? 0));
-            } else if (showPersonaBox) {
-                // Non-matching node: push it outside the persona box
-                const nx = n.x ?? 0;
-                const ny = n.y ?? 0;
-                const inBoxX = nx > personaBox.cx - personaBox.hw && nx < personaBox.cx + personaBox.hw;
-                const inBoxY = ny > personaBox.cy - personaBox.hh && ny < personaBox.cy + personaBox.hh;
-                if (inBoxX && inBoxY) {
-                  const dTop = ny - (personaBox.cy - personaBox.hh);
-                  const dBottom = (personaBox.cy + personaBox.hh) - ny;
-                  if (dTop < dBottom) n.vy = (n.vy ?? 0) - 0.5 * alpha * 50;
-                  else n.vy = (n.vy ?? 0) + 0.5 * alpha * 50;
-                }
-            } else if ((n.y ?? 0) < FREE_Y_BIAS) {
-              n.vy = (n.vy ?? 0) + (FREE_Y_BIAS - (n.y ?? 0)) * 0.18 * alpha;
+
+              // Hard boundary: clamp position AND kill outward velocity
+              const x = n.x ?? 0;
+              const y = n.y ?? 0;
+              if (x < minX) { n.x = minX; if ((n.vx ?? 0) < 0) n.vx = 0; }
+              else if (x > maxX) { n.x = maxX; if ((n.vx ?? 0) > 0) n.vx = 0; }
+              if (y < minY) { n.y = minY; if ((n.vy ?? 0) < 0) n.vy = 0; }
+              else if (y > maxY) { n.y = maxY; if ((n.vy ?? 0) > 0) n.vy = 0; }
             }
           });
         },
@@ -418,7 +385,7 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
         graphRef.current?.zoomToFit(400, 60);
       }, 50);
     }
-  }, [layoutMode, groupFilter, size.width, size.height, pages, data]);
+  }, [layoutMode, size.width, size.height, pages, data, laneRepulsion]);
 
   // ── Node drawing ──────────────────────────────────────────────────────────
   const drawNode = useCallback(
@@ -597,19 +564,8 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
 
       if (layoutMode === 'grouped') {
         const boxes = computeGroupBoxes(size.width, size.height);
-        let overlayBoxes: typeof boxes;
-        if (groupFilter) {
-          const PAD = 60;
-          overlayBoxes = [{
-            type: groupFilter,
-            cx: 0,
-            cy: 0,
-            hw: size.width / 2 - PAD,
-            hh: size.height / 2 - PAD,
-          }];
-        } else {
-          overlayBoxes = boxes;
-        }
+        // FEEDBACK012: Always show all boxes
+        const overlayBoxes = boxes;
         overlayBoxes.forEach((box) => {
           const color = PAGE_COLORS[box.type];
           // Semi-transparent fill
@@ -766,18 +722,10 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // "NO DEADLINE" zone label
-        ctx.font = `700 ${fsLabel}px 'Segoe UI', system-ui, sans-serif`;
-        ctx.fillStyle = 'rgba(200,200,230,0.2)';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('NO DEADLINE', -size.width / 2 + 54, FREE_Y_BIAS + 4 / globalScale);
-
-        // Category lanes below the timeline (TASK-032) — only when filter is active, excluding objectives (TASK-043)
-        const lanes = groupFilter && groupFilter !== 'objective'
-          ? computeTimelineLanes(size.width, size.height, TIMELINE_Y).filter(l => l.type === groupFilter)
-          : [];
-        lanes.forEach((lane) => {
+        // FEEDBACK012: Category boxes always visible (task, persona, component, note)
+        // Skip objective lane as it's above the timeline axis
+        const allLanes = computeTimelineLanes(size.width, size.height, TIMELINE_Y);
+        allLanes.filter(l => l.type !== 'objective').forEach((lane) => {
           const color = PAGE_COLORS[lane.type];
           ctx.fillStyle = color + '14';
           ctx.fillRect(lane.cx - lane.hw, lane.cy - lane.hh, lane.hw * 2, lane.hh * 2);
@@ -795,30 +743,9 @@ export function Graph({ data, pages, selectedId, layoutMode, groupFilter, onNode
             lane.cy - lane.hh,
           );
         });
-
-        // Persona grouping box (TASK-038 Req 2) — only when persona filter active (TASK-043)
-        if (groupFilter === 'persona') {
-        const pBox = { cx: 0, cy: FREE_Y_BIAS + 80, hw: size.width / 2 - 50, hh: 60 };
-        const pColor = PAGE_COLORS.persona;
-        ctx.fillStyle = pColor + '14';
-        ctx.fillRect(pBox.cx - pBox.hw, pBox.cy - pBox.hh, pBox.hw * 2, pBox.hh * 2);
-        ctx.strokeStyle = pColor + '55';
-        ctx.lineWidth = 1.5 / globalScale;
-        ctx.strokeRect(pBox.cx - pBox.hw, pBox.cy - pBox.hh, pBox.hw * 2, pBox.hh * 2);
-        const pFs = 10 / globalScale;
-        ctx.font = `700 ${pFs}px 'Segoe UI', system-ui, sans-serif`;
-        ctx.fillStyle = pColor + 'cc';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(
-          PAGE_TYPE_LABELS.persona.toUpperCase(),
-          pBox.cx - pBox.hw + 4 / globalScale,
-          pBox.cy - pBox.hh,
-        );
-        }
       }
     },
-    [layoutMode, groupFilter, pages, size.width, size.height],
+    [layoutMode, pages, size.width, size.height],
   );
 
   // Prevent dragging deadline-pinned nodes in timeline mode.

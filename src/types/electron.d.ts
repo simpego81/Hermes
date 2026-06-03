@@ -18,6 +18,7 @@ interface HermesDesktopApi {
     renameFile(dirPath: string, oldRelPath: string, newRelPath: string): Promise<void>;
     getLastPath(): Promise<string | null>;
     setLastPath(dirPath: string | null): Promise<void>;
+    getTestVaultPath(): Promise<string | null>;
   };
   onMenuNewPage(callback: () => void): void;
   onMenuOpenVault(callback: () => void): void;

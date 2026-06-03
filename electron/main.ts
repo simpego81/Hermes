@@ -273,3 +273,8 @@ ipcMain.handle(
     await rename(oldFull, newFull);
   },
 );
+
+// E2E test support: return test vault path if HERMES_TEST_VAULT_PATH env var is set
+ipcMain.handle('vault:get-test-vault-path', async () => {
+  return process.env.HERMES_TEST_VAULT_PATH ?? null;
+});

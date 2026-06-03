@@ -3,12 +3,13 @@ import type { HermesPage, PageType } from './types';
 
 export type LayoutMode = 'free' | 'grouped' | 'timeline';
 
-/** Order in which category boxes are placed (row-major, 3 cols) and timeline lanes (top to bottom). */
+/** Order in which category boxes are placed (row-major, 3 cols) and timeline lanes (top to bottom).
+ * FEEDBACK012: Timeline order - objective, task, persona, component, note */
 export const BOX_TYPE_ORDER: PageType[] = [
   'objective',
-  'component',
   'task',
   'persona',
+  'component',
   'note',
 ];
 
@@ -105,7 +106,7 @@ export function computeTimelinePositions(
   pages: HermesPage[],
   canvasW: number,
 ): {
-  positions: Map<string, { x: number; type: PageType }>;
+  positions: Map<string, { x: number; type: PageType; hasDeadline: boolean }>;
   todayX: number | null;
 } {
   const PAD = 90;
@@ -169,7 +170,7 @@ export function computeTimelinePositions(
   }
 
   // Position nodes based on depth and deadline
-  const positions = new Map<string, { x: number; type: PageType }>();
+  const positions = new Map<string, { x: number; type: PageType; hasDeadline: boolean }>();
 
   // Find max depth for positioning range
   const maxDepth = Math.max(0, ...Array.from(depth.values()));
@@ -186,7 +187,7 @@ export function computeTimelinePositions(
         const maxT = Math.max(...times, today);
         const range = maxT - minT || 1;
         const t = (deadline - minT) / range;
-        positions.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type });
+        positions.set(p.id, { x: xMin + t * (xMax - xMin), type: p.type, hasDeadline: true });
       }
     } else if (nodeDepth !== undefined) {
       // Non-objective nodes or objectives without deadline: position by depth
@@ -202,11 +203,11 @@ export function computeTimelinePositions(
         const deadlineX = xMin + t * (xMax - xMin);
         // Place to the left of deadline position based on depth
         const x = deadlineX - nodeDepth * DEPTH_SPACING;
-        positions.set(p.id, { x: Math.max(xMin, x), type: p.type });
+        positions.set(p.id, { x: Math.max(xMin, x), type: p.type, hasDeadline: true });
       } else {
-        // No deadline: pure depth-based positioning
+        // No deadline: pure depth-based positioning — not pinned, just initial position
         const x = xMax - nodeDepth * DEPTH_SPACING;
-        positions.set(p.id, { x: Math.max(xMin, x), type: p.type });
+        positions.set(p.id, { x: Math.max(xMin, x), type: p.type, hasDeadline: false });
       }
     }
   });
@@ -225,10 +226,11 @@ export interface TimelineLane {
 /**
  * Compute horizontal "swim lanes" for the timeline view.
  *
- * FEEDBACK011 — Swimlane per category:
- *   - Each category gets its own swimlane (horizontal band)
- *   - Visual order top to bottom: objectives, components, tasks, persona, notes
- *   - Objectives remain above timeline axis for prominence
+ * FEEDBACK012 — Full-width category boxes:
+ *   - Each category gets its own box (horizontal band) at full timeline width
+ *   - Visual order top to bottom: objectives (above axis), task, persona, component, note
+ *   - All categories always visible (no filtering)
+ *   - Nodes confined within their category box with padding
  */
 export function computeTimelineLanes(
   canvasW: number,
@@ -241,17 +243,17 @@ export function computeTimelineLanes(
 
   const hw = canvasW / 2 - PAD_X;
 
-  // FEEDBACK011: New vertical order - objectives, components, tasks, persona, notes
+  // FEEDBACK012: New vertical order - objectives (above), task, persona, component, note
   // Offset from timeline axis (negative = above axis)
   const laneLayout: { type: PageType; offsetFromAxis: number }[] = [
     // Objectives: above axis (top)
     { type: 'objective', offsetFromAxis: -(LANE_H + GAP + 24) },
-    // Components: below axis, first lane
-    { type: 'component', offsetFromAxis: LANE_H + GAP },
-    // Tasks: below components
-    { type: 'task',      offsetFromAxis: LANE_H * 3 + GAP * 2 + 8 },
+    // Tasks: below axis, first lane
+    { type: 'task',      offsetFromAxis: LANE_H + GAP },
     // Persona: below tasks
-    { type: 'persona',   offsetFromAxis: LANE_H * 5 + GAP * 3 + 8 },
+    { type: 'persona',   offsetFromAxis: LANE_H * 3 + GAP * 2 + 8 },
+    // Components: below persona
+    { type: 'component', offsetFromAxis: LANE_H * 5 + GAP * 3 + 8 },
     // Notes: bottom
     { type: 'note',      offsetFromAxis: LANE_H * 7 + GAP * 4 + 8 },
   ];

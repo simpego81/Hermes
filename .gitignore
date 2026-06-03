@@ -4,3 +4,8 @@ dist/
 dist-electron/
 .DS_Store
 Thumbs.db
+
+# Playwright E2E test outputs
+test-results/
+playwright-report/
+playwright/.cache/

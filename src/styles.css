@@ -270,6 +270,29 @@ body,
   color: #c8c0ff;
 }
 
+.toolbar-slider-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--sidebar-muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.toolbar-slider-label input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.toolbar-slider-value {
+  min-width: 2.2ch;
+  text-align: right;
+  color: #c8c0ff;
+  font-size: 0.75rem;
+}
+
 .toolbar-select {
   padding: 6px 10px;
   font-size: 0.78rem;
